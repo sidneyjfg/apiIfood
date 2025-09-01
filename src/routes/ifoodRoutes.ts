@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { getToken } from '../controllers/ifoodAuthController';
 import { handleIfoodWebhook } from '../controllers/webhookController';
 import {
-  syncIfoodItems,
+  syncIfoodItemsAll,
   getProductByExternalCode,
   getProductById
 } from '../controllers/ifoodProductController';
@@ -127,7 +127,7 @@ router.get('/ifood/token', getToken);
  *       500:
  *         description: Erro ao sincronizar itens
  */
-router.get('/ifood/items/sync', syncIfoodItems);
+router.get('/ifood/items/sync', syncIfoodItemsAll);
 
 /**
  * @swagger

@@ -58,6 +58,20 @@ export class IfoodProductService {
 
     let totalInserted = 0;
 
+    // 🔒 lista de campos permitidos no Product (evita mandar 'id' ou colunas estranhas)
+    const PRODUCT_FIELDS = [
+      'external_code',
+      'name',
+      'price',
+      'status',
+      'product_id',
+      'description',
+      'image_path',
+      'ean',
+      'merchant_id',
+      'on_hand',
+    ] as const;
+
     for (const category of categories) {
       const rawItems = category.items;
       if (!rawItems) continue;
@@ -74,8 +88,9 @@ export class IfoodProductService {
         const image: string | undefined = item.imagePath;
         const ean: string | undefined = item.ean;
 
-        const sellingOptionMinimum: number | null = item.sellingOption?.minimum ?? null;
-        const sellingOptionIncremental: number | null = item.sellingOption?.incremental ?? null;
+        // se usar sellingOption no futuro, já estão lidos aqui:
+        // const sellingOptionMinimum: number | null = item.sellingOption?.minimum ?? null;
+        // const sellingOptionIncremental: number | null = item.sellingOption?.incremental ?? null;
 
         if (!externalCode || !name || !productId) continue;
 
@@ -91,10 +106,10 @@ export class IfoodProductService {
               },
             }
           );
-          // amount é número
-          stockAmount = typeof stockResponse.data?.amount === 'number'
-            ? stockResponse.data.amount
-            : null;
+          stockAmount =
+            typeof stockResponse.data?.amount === 'number'
+              ? stockResponse.data.amount
+              : null;
         } catch (error: any) {
           console.warn(`⚠️ Erro ao buscar estoque do produto ${productId}:`, error?.message ?? error);
         }
@@ -110,52 +125,74 @@ export class IfoodProductService {
           image_path: image,
           ean,
           merchant_id: merchantId,
-          on_hand: stockAmount ?? 0, // <-- usar on_hand
-          // selling_option_minimum / selling_option_incremental
-          // só inclua se existirem no seu model/tabela
-          // selling_option_minimum: sellingOptionMinimum as any,
-          // selling_option_incremental: sellingOptionIncremental as any,
+          on_hand: stockAmount ?? 0,
         };
 
-        // Garanta que busca considere merchant_id para não colidir entre lojas
-        const existingProduct = await Product.findOne({
-          where: { external_code: externalCode, merchant_id: merchantId },
-        });
+        // 🔒 SANITIZA: nunca permita 'id' no payload
+        const { id: _discardId, ...productDataClean } = productData as any;
 
-        if (existingProduct) {
-          const oldOnHand = existingProduct.on_hand ?? 0;
-          const newOnHand = stockAmount ?? oldOnHand;
+        try {
+          // Garanta que busca considere merchant_id para não colidir entre lojas
+          const existingProduct = await Product.findOne({
+            where: { external_code: externalCode, merchant_id: merchantId },
+          });
 
-          // Se mudou o estoque publicado no iFood, logar
-          if (typeof stockAmount === 'number' && oldOnHand !== newOnHand) {
-            await StockLog.create({
-              merchant_id: merchantId,
-              product_sku: externalCode,
-              source: 'IFOOD',
-              old_quantity: oldOnHand,
-              new_quantity: newOnHand,
-              status: 'SUCCESS',
-              message: 'Estoque (on_hand) atualizado via sincronização com iFood',
-            });
+          if (existingProduct) {
+            const oldOnHand = existingProduct.on_hand ?? 0;
+            const newOnHand = stockAmount ?? oldOnHand;
+
+            // Se mudou o estoque publicado no iFood, logar
+            if (typeof stockAmount === 'number' && oldOnHand !== newOnHand) {
+              try {
+                await StockLog.create({
+                  merchant_id: merchantId,
+                  product_sku: externalCode,
+                  source: 'IFOOD',
+                  old_quantity: oldOnHand,
+                  new_quantity: newOnHand,
+                  status: 'SUCCESS',
+                  message: 'Estoque (on_hand) atualizado via sincronização com iFood',
+                } as any);
+              } catch (e: any) {
+                console.error('❌ StockLog.create falhou (update):', e?.message, e?.parent?.sql);
+              }
+            }
+
+            // 🔒 update com fields explícitos
+            await existingProduct.update(productDataClean, { fields: PRODUCT_FIELDS as any });
+          } else {
+            // 🔒 create com fields explícitos
+            await Product.create(productDataClean, { fields: PRODUCT_FIELDS as any });
+
+            try {
+              await StockLog.create({
+                merchant_id: merchantId,
+                product_sku: externalCode,
+                source: 'IFOOD',
+                old_quantity: null,
+                new_quantity: stockAmount,
+                status: 'SUCCESS',
+                message: 'Produto criado com estoque inicial via iFood',
+              } as any);
+            } catch (e: any) {
+              console.error('❌ StockLog.create falhou (create):', e?.message, e?.parent?.sql);
+            }
           }
 
-          await existingProduct.update(productData as any);
-        } else {
-          // Se seu model não tiver 'synced_at', NÃO passe esse campo aqui.
-          await Product.create(productData as any);
-
-          await StockLog.create({
-            merchant_id: merchantId,
-            product_sku: externalCode,
-            source: 'IFOOD',
-            old_quantity: null,
-            new_quantity: stockAmount,
-            status: 'SUCCESS',
-            message: 'Produto criado com estoque inicial via iFood',
+          totalInserted++;
+        } catch (e: any) {
+          // 🔎 Logs ricos pra identificar a origem (inclui SQL quando disponível)
+          console.error('❌ ERRO ao upsert do produto', {
+            merchantId,
+            externalCode,
+            productId,
+            msg: e?.message,
+            sql: e?.parent?.sql,
+            errno: e?.parent?.errno,
+            code: e?.parent?.code,
           });
+          // segue o loop; não derruba a sincronização por item
         }
-
-        totalInserted++;
       }
     }
 

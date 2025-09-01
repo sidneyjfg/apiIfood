@@ -1,36 +1,42 @@
-// models/products.ts
+// src/database/models/products.ts
 import { Model, DataTypes, Optional } from 'sequelize';
 import { sequelize } from '../../config/database';
 
 interface ProductAttributes {
-  id: string;
+  id: number;                         // INT AUTO_INCREMENT no MySQL atual
   merchant_id: string;
   external_code: string;
-  product_id?: string | null;
+  product_id: string;                 // NOT NULL na tabela
   ean?: string | null;
-  name?: string | null;
+  name: string;                       // NOT NULL na tabela
   description?: string | null;
   image_path?: string | null;
   price?: number | null;
-  status?: string | null;
+  status: string;                     // default 'AVAILABLE'
   on_hand: number;
   created_at?: Date;
   updated_at?: Date;
 }
 
-type ProductCreationAttributes = Optional<ProductAttributes, 'id' | 'created_at' | 'updated_at'>;
+type ProductCreationAttributes = Optional<
+  ProductAttributes,
+  'id' | 'ean' | 'description' | 'image_path' | 'price' | 'status' | 'created_at' | 'updated_at'
+>;
 
-export class Product extends Model<ProductAttributes, ProductCreationAttributes> implements ProductAttributes {
-  public id!: string;
+export class Product
+  extends Model<ProductAttributes, ProductCreationAttributes>
+  implements ProductAttributes
+{
+  public id!: number;
   public merchant_id!: string;
   public external_code!: string;
-  public product_id?: string | null;
+  public product_id!: string;
   public ean?: string | null;
-  public name?: string | null;
+  public name!: string;
   public description?: string | null;
   public image_path?: string | null;
   public price?: number | null;
-  public status?: string | null;
+  public status!: string;
   public on_hand!: number;
   public created_at?: Date;
   public updated_at?: Date;
@@ -38,19 +44,20 @@ export class Product extends Model<ProductAttributes, ProductCreationAttributes>
 
 Product.init(
   {
-    id: { type: DataTypes.UUID, primaryKey: true, defaultValue: DataTypes.UUIDV4 },
+    id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
 
-    merchant_id: { type: DataTypes.STRING(45), allowNull: false },
-    external_code: { type: DataTypes.STRING(45), allowNull: false },
+    merchant_id: { type: DataTypes.STRING(255), allowNull: false },
+    external_code: { type: DataTypes.STRING(255), allowNull: false },
 
-    product_id: { type: DataTypes.STRING(45), allowNull: true },
-    ean: { type: DataTypes.STRING(64), allowNull: true }, // pode ser >45, deixe 64
+    product_id: { type: DataTypes.STRING(255), allowNull: false },
+    ean: { type: DataTypes.STRING(255), allowNull: true },
 
-    name: { type: DataTypes.STRING(255), allowNull: true },
+    name: { type: DataTypes.STRING(255), allowNull: false },
     description: { type: DataTypes.TEXT, allowNull: true },
     image_path: { type: DataTypes.STRING(255), allowNull: true },
     price: { type: DataTypes.FLOAT, allowNull: true },
-    status: { type: DataTypes.STRING(32), allowNull: true },
+
+    status: { type: DataTypes.STRING(255), allowNull: false, defaultValue: 'AVAILABLE' },
 
     on_hand: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 0 },
 
@@ -64,18 +71,20 @@ Product.init(
     timestamps: true,
     createdAt: 'created_at',
     updatedAt: 'updated_at',
+
+    // Estes índices documentam a intenção e ajudam se você criar a tabela do zero via sync/migrations.
     indexes: [
-      { // UNIQUE (merchant_id, external_code)
+      {
         name: 'uq_prod_merchant_external',
         unique: true,
         fields: ['merchant_id', 'external_code'],
       },
-      { // UNIQUE (merchant_id, product_id)
+      {
         name: 'uq_prod_merchant_productid',
         unique: true,
         fields: ['merchant_id', 'product_id'],
       },
-      { // opcional: busca por EAN
+      {
         name: 'idx_prod_merchant_ean',
         unique: false,
         fields: ['merchant_id', 'ean'],
