@@ -19,6 +19,7 @@ Merchant.init({
   webhook_secret: { type: DataTypes.STRING(128), allowNull: true },
   created_at: { type: DataTypes.DATE, defaultValue: DataTypes.NOW },
   updated_at: { type: DataTypes.DATE, defaultValue: DataTypes.NOW },
+  corporate_name: { type: DataTypes.STRING(160), allowNull: true },
 }, {
   sequelize,
   modelName: 'Merchant',
