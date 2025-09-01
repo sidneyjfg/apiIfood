@@ -4,7 +4,16 @@
   "main": "index.js",
   "scripts": {
     "dev": "ts-node-dev src/index.ts",
-    "start": "tsc && node dist/index.js"
+    "start": "tsc && node dist/index.js",
+    "db:migrate": "sequelize-cli db:migrate",
+    "db:undo": "sequelize-cli db:migrate:undo",
+    "db:undo:all": "sequelize-cli db:migrate:undo:all",
+    "db:status": "sequelize-cli db:show",
+    "db:create": "sequelize-cli db:create",
+    "db:drop": "sequelize-cli db:drop",
+    "db:reset": "sequelize-cli db:migrate:undo:all && sequelize-cli db:migrate",
+    "db:recreate": "sequelize-cli db:drop && sequelize-cli db:create && sequelize-cli db:migrate",
+    "db:new": "sequelize-cli migration:create"
   },
   "keywords": [],
   "author": "",
