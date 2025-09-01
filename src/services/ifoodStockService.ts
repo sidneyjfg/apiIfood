@@ -7,24 +7,35 @@ export async function updateIfoodStock(
     accessToken: string
 ) {
     try {
-        await axios.patch(
-            `https://merchant-api.ifood.com.br/catalog/v2.0/merchants/${merchantId}/inventory`,
-            [{ productId, amount }],
-            {
-                headers: {
-                    Authorization: `Bearer ${accessToken}`,
-                    Accept: 'application/json',
-                    'Content-Type': 'application/json',
-                },
-            }
-        );
+        const url = `https://merchant-api.ifood.com.br/catalog/v2.0/merchants/${merchantId}/inventory`;
 
-        console.log(`✅ Estoque atualizado no iFood para ${productId}: ${amount}`);
+        const payload = {
+            productId,
+            amount
+        };
+
+        await axios.post(url, payload, {
+            headers: {
+                Authorization: `Bearer ${accessToken}`,
+                Accept: 'application/json',
+                'Content-Type': 'application/json',
+            },
+        });
+
+        console.log(`✅ Estoque atualizado no iFood (productId=${productId}): ${amount}`);
+        return true;
     } catch (error: any) {
-        if (error instanceof Error) {
-            console.error(`❌ Erro ao atualizar estoque: ${error.message}`);
+        const status = error?.response?.status;
+        const data = error?.response?.data;
+
+        if (status === 404) {
+            console.error(
+                `❌ 404 ao atualizar estoque: verifique se productId pertence a um Product no catálogo v2 e se o merchantId está correto. Detalhes:`,
+                data
+            );
         } else {
-            console.error(`❌ Erro desconhecido ao atualizar estoque`, error);
+            console.error(`❌ Erro ao atualizar estoque (status ${status ?? '???'}):`, data ?? error.message);
         }
+        return false;
     }
 }

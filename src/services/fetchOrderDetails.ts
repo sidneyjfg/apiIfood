@@ -20,7 +20,7 @@ export async function fetchOrderDetails(orderId: string, accessToken: string) {
           },
         }
       );
-      console.log(response.data);
+      console.log('Detalhes do Pedido',response.data);
       return response.data;
     } catch (error:any) {
       const status = error?.response?.status;
