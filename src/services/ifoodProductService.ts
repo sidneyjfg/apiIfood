@@ -1,6 +1,7 @@
+// services/IfoodProductService.ts
 import axios from 'axios';
 import { Product } from '../database/models/products';
-import { StockLog } from '../database/models/stock_logs'; // ajuste o path se necessário
+import { StockLog } from '../database/models/stock_logs';
 
 export class IfoodProductService {
   static async syncAllCatalogs(
@@ -45,9 +46,7 @@ export class IfoodProductService {
           Authorization: `Bearer ${accessToken}`,
           Accept: 'application/json',
         },
-        params: {
-          includeItems: true,
-        },
+        params: { includeItems: true },
       }
     );
 
@@ -57,7 +56,6 @@ export class IfoodProductService {
       categories.map((c: { name: string }) => c.name)
     );
 
-    const seenExternalCodes = new Set<string>();
     let totalInserted = 0;
 
     for (const category of categories) {
@@ -67,22 +65,22 @@ export class IfoodProductService {
       const items = Array.isArray(rawItems) ? rawItems : [rawItems];
 
       for (const item of items) {
-        const externalCode = item.externalCode;
-        const name = item.name;
-        const price = item.price?.value ?? null;
-        const status = item.status;
-        const productId = item.productId;
-        const description = item.description;
-        const image = item.imagePath;
-        const ean = item.ean;
+        const externalCode: string | undefined = item.externalCode;
+        const name: string | undefined = item.name;
+        const price: number | null = item.price?.value ?? null;
+        const status: string | undefined = item.status;
+        const productId: string | undefined = item.productId;
+        const description: string | undefined = item.description;
+        const image: string | undefined = item.imagePath;
+        const ean: string | undefined = item.ean;
 
-        const sellingOptionMinimum = item.sellingOption?.minimum ?? null;
-        const sellingOptionIncremental = item.sellingOption?.incremental ?? null;
+        const sellingOptionMinimum: number | null = item.sellingOption?.minimum ?? null;
+        const sellingOptionIncremental: number | null = item.sellingOption?.incremental ?? null;
 
         if (!externalCode || !name || !productId) continue;
 
-        // busca estoque
-        let stockAmount = null;
+        // Buscar estoque atual no iFood
+        let stockAmount: number | null = null;
         try {
           const stockResponse = await axios.get(
             `https://merchant-api.ifood.com.br/catalog/v2.0/merchants/${merchantId}/inventory/${productId}`,
@@ -93,54 +91,57 @@ export class IfoodProductService {
               },
             }
           );
-          stockAmount = stockResponse.data?.amount ?? null;
+          // amount é número
+          stockAmount = typeof stockResponse.data?.amount === 'number'
+            ? stockResponse.data.amount
+            : null;
         } catch (error: any) {
-          console.warn(`Erro ao buscar estoque`, error.message);
+          console.warn(`⚠️ Erro ao buscar estoque do produto ${productId}:`, error?.message ?? error);
         }
 
-        const now = new Date();
-
-        const productData = {
+        // Montar dados compatíveis com o seu Product model
+        const productData: Partial<Product> = {
           external_code: externalCode,
           name,
-          price,
-          status,
+          price: price as any, // ajuste o tipo no seu model se for DECIMAL
+          status: status as any,
           product_id: productId,
           description,
           image_path: image,
           ean,
           merchant_id: merchantId,
-          quantity: stockAmount,
-          selling_option_minimum: sellingOptionMinimum,
-          selling_option_incremental: sellingOptionIncremental,
+          on_hand: stockAmount ?? 0, // <-- usar on_hand
+          // selling_option_minimum / selling_option_incremental
+          // só inclua se existirem no seu model/tabela
+          // selling_option_minimum: sellingOptionMinimum as any,
+          // selling_option_incremental: sellingOptionIncremental as any,
         };
 
+        // Garanta que busca considere merchant_id para não colidir entre lojas
         const existingProduct = await Product.findOne({
-          where: { external_code: externalCode },
+          where: { external_code: externalCode, merchant_id: merchantId },
         });
 
         if (existingProduct) {
-          const oldQuantity = existingProduct.quantity;
-          const newQuantity = stockAmount;
+          const oldOnHand = existingProduct.on_hand ?? 0;
+          const newOnHand = stockAmount ?? oldOnHand;
 
-          // Verifica se houve alteração de estoque
-          if (oldQuantity !== null && newQuantity !== null && oldQuantity !== newQuantity) {
+          // Se mudou o estoque publicado no iFood, logar
+          if (typeof stockAmount === 'number' && oldOnHand !== newOnHand) {
             await StockLog.create({
               product_sku: externalCode,
               source: 'IFOOD',
-              old_quantity: oldQuantity,
-              new_quantity: newQuantity,
+              old_quantity: oldOnHand,
+              new_quantity: newOnHand,
               status: 'SUCCESS',
-              message: 'Estoque atualizado via sincronização com iFood',
+              message: 'Estoque (on_hand) atualizado via sincronização com iFood',
             });
           }
 
-          await existingProduct.update(productData);
+          await existingProduct.update(productData as any);
         } else {
-          await Product.create({
-            ...productData,
-            synced_at: now,
-          });
+          // Se seu model não tiver 'synced_at', NÃO passe esse campo aqui.
+          await Product.create(productData as any);
 
           await StockLog.create({
             product_sku: externalCode,
