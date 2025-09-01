@@ -29,3 +29,6 @@ export async function handleIfoodWebhook(req: Request, res: Response) {
   }
 }
 
+export async function handleErpWebhook(req: Request, res: Response) {
+
+}
