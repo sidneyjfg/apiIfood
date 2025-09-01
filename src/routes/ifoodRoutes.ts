@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { IfoodAuthController } from '../controllers/ifoodAuthController';
+import { getToken } from '../controllers/ifoodAuthController';
 import { handleIfoodWebhook } from '../controllers/webhookController';
 import {
     syncIfoodItems,
@@ -63,7 +63,7 @@ router.post('/webhook/ifood', handleIfoodWebhook);
  *       500:
  *         description: Erro ao obter token
  */
-router.get('/ifood/token', IfoodAuthController.getToken);
+router.get('/ifood/token', getToken);
 
 /**
  * @swagger

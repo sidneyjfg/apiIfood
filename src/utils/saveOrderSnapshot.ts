@@ -1,4 +1,5 @@
 // utils/saveOrderSnapshot.ts
+import { mergeConfig } from 'axios';
 import { Order } from '../database/models/order';
 import { OrderItem } from '../database/models/orderItem';
 
@@ -10,9 +11,9 @@ export async function saveOrderSnapshot(merchantId: string, orderPayload: any) {
   const o = orderPayload ?? {};
   const orderId = o.id ?? o.orderId; // alguns payloads usam orderId
   if (!orderId) throw new Error('orderPayload sem id/orderId');
-
   await Order.upsert({
     id: orderId,
+    order_id: orderId,            // <<< preenche numero do pedido
     display_id: o.displayId ?? o.display_id,
     merchant_id: merchantId,
 
@@ -59,7 +60,7 @@ export async function saveOrderSnapshot(merchantId: string, orderPayload: any) {
   const items = Array.isArray(o.items) ? o.items : [];
   for (const it of items) {
     await OrderItem.upsert({
-      // chave lógica: (order_id, external_code)
+      merchant_id: merchantId,              // 🔧 ADICIONE
       order_id: orderId,
       external_code: it.externalCode,
 

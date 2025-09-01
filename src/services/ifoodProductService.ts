@@ -129,6 +129,7 @@ export class IfoodProductService {
           // Se mudou o estoque publicado no iFood, logar
           if (typeof stockAmount === 'number' && oldOnHand !== newOnHand) {
             await StockLog.create({
+              merchant_id: merchantId,
               product_sku: externalCode,
               source: 'IFOOD',
               old_quantity: oldOnHand,
@@ -144,6 +145,7 @@ export class IfoodProductService {
           await Product.create(productData as any);
 
           await StockLog.create({
+            merchant_id: merchantId,
             product_sku: externalCode,
             source: 'IFOOD',
             old_quantity: null,

@@ -1,7 +1,6 @@
-
 # 🛠️ API de Integração iFood ↔ ERP – Controle de Estoque
 
-Este projeto tem como objetivo integrar a plataforma **iFood** com um **ERP**, permitindo controle bidirecional de **estoque**, **pedidos**, e **produtos**, com uma base sólida e escalável usando **Node.js + TypeScript + Sequelize + MySQL**.
+Este projeto integra a plataforma **iFood** com um **ERP**, permitindo controle **bidirecional de estoque**, **pedidos**, e **produtos**, com base sólida e escalável em **Node.js + TypeScript + Sequelize + MySQL**.
 
 ---
 
@@ -13,7 +12,7 @@ Este projeto tem como objetivo integrar a plataforma **iFood** com um **ERP**, p
 - [Sequelize](https://sequelize.org/)
 - [MySQL](https://www.mysql.com/)
 - [dotenv](https://github.com/motdotla/dotenv)
-- [Swagger](https://swagger.io/tools/swagger-ui/) (via swagger-jsdoc)
+- [Swagger](https://swagger.io/tools/swagger-ui/)
 
 ---
 
@@ -27,18 +26,16 @@ src/
 │   ├── migrations/     # Migrations Sequelize
 │   ├── models/         # Models Sequelize
 ├── routes/             # Rotas da aplicação
-├── services/           # Lógica externa (iFood, ERP)
-├── utils/              # Funções auxiliares
-├── types/              # Tipagens personalizadas (.d.ts)
-├── app.ts              # Configuração principal do Express
+├── services/           # Integração iFood/ERP
+├── utils/              # Funções auxiliares (estoque, snapshot, etc.)
+├── types/              # Tipagens personalizadas
+├── app.ts              # Configuração do Express
 └── index.ts            # Inicialização da API
 ```
 
 ---
 
 ## ⚙️ Configuração do Ambiente (.env)
-
-Crie um arquivo `.env` com as seguintes variáveis:
 
 ```env
 PORT=3000
@@ -64,13 +61,15 @@ GRANT ALL PRIVILEGES ON ifood_erp.* TO 'sidney_user'@'localhost';
 FLUSH PRIVILEGES;
 ```
 
-### ✅ Migrations disponíveis:
+### ✅ Migrations principais:
 
-- `products` – Cadastro de produtos
+- `products` – Cadastro de produtos (`on_hand` unificado, sem `reserved_quantity`)
+- `orders` – Snapshot dos pedidos
+- `order_items` – Itens do pedido com controle de estado (`NEW`, `RESERVED`, `CONCLUDED`, `CANCELLED`)
 - `stock_logs` – Logs de movimentação de estoque
-- `auth_tokens` – Armazena tokens OAuth do iFood
+- `auth_tokens` – Tokens OAuth do iFood
 
-> Rodar com:
+Rodar com:
 
 ```bash
 npx sequelize-cli db:migrate
@@ -78,13 +77,13 @@ npx sequelize-cli db:migrate
 
 ---
 
-## 📦 Models Sequelize criados (com TypeScript)
+## 📦 Models Sequelize (TypeScript)
 
-- `Product` → Representa os produtos sincronizados
-- `StockLog` → Representa logs de entrada/baixa de estoque
-- `AuthToken` → Representa o token OAuth do iFood
-
-> Todos os models ficam em `src/database/models/`
+- `Product` → Estoque físico (`on_hand`)  
+- `Order` → Snapshot de pedidos iFood  
+- `OrderItem` → Itens do pedido (com rastreio de estado e quantidades)  
+- `StockLog` → Auditoria de movimentações  
+- `AuthToken` → Tokens OAuth iFood  
 
 ---
 
@@ -96,7 +95,7 @@ Rota configurada:
 POST /webhook/ifood
 ```
 
-Exemplo de payload esperado:
+Exemplo de payload:
 
 ```json
 {
@@ -113,18 +112,25 @@ Exemplo de payload esperado:
 
 ---
 
-## 📚 Documentação com Swagger
+## 🔄 Fluxo de Estoque iFood ↔ ERP
 
-- Documentação acessível em:
+- **Reserva (`PLC`)** → baixa provisória em `on_hand` + incrementa `reserved_qty` no `order_items`
+- **Cancelamento (`CAN`)** → libera estoque caso tenha sido reservado
+- **Conclusão (`CON`)** → baixa definitiva do pedido (se já reservado)  
+- **Snapshot (`saveOrderSnapshot`)** → grava pedidos e itens antes de movimentar estoque (auditoria)
+
+> **Importante:**  
+Pedidos que chegam **cancelados sem reserva** não movimentam estoque, evitando inconsistências.
+
+---
+
+## 📚 Documentação com Swagger
 
 ```
 http://localhost:3000/docs
 ```
 
-> Swagger configurado com `swagger-jsdoc` + `swagger-ui-express`.
-
-> Arquivo de tipagem criado em:  
-`src/types/swagger-jsdoc.d.ts` para resolver erro do TypeScript.
+Configurado com `swagger-jsdoc` + `swagger-ui-express`.
 
 ---
 
@@ -150,15 +156,25 @@ npm run dev
 
 ---
 
+## 📝 Auditoria de Estoque
+
+Consultas SQL úteis estão em [`sqlsEstoque.sql`](./src/database/sqlsEstoque.sql)  
+Inclui relatórios de **estoque x reservas**, **logs de movimentações** e **consistência de pedidos**.
+
+---
+
 ## 🔜 Próximos passos
 
-- Criar serviço de autenticação com a API do iFood ✅Feito
-- Criar job de sincronização ERP → iFood (estoque)
-- Criar CRUD de produtos e painel de visualização
-- Tratar reprocessamento de erros de pedidos e sincronizações
+- [x] Integração OAuth iFood  
+- [x] Controle de estoque unificado (`on_hand`)  
+- [x] Snapshot de pedidos e itens  
+- [x] Logs detalhados de movimentação  
+- [ ] Job de sincronização ERP → iFood  
+- [ ] CRUD de produtos e painel de visualização  
+- [ ] Reprocessamento de erros de pedidos e sincronizações  
 
 ---
 
 ## 🧑‍💻 Autor
 
-Desenvolvido por Sidney
+Desenvolvido por Sidney 🚀

@@ -8,20 +8,23 @@ import { updateIfoodStock } from './ifoodStockService';
 type Channel = 'IFOOD' | 'PDV' | 'MANUAL';
 type ReservationState = 'ACTIVE' | 'CANCELLED' | 'CONSUMED';
 
-export async function getOnHandAndActiveReserved(productId: string | number) {
-  const product = await Product.findByPk(productId as any, { attributes: ['id', 'product_id', 'on_hand'] });
-  if (!product) throw new Error(`Product ${productId} não encontrado`);
+export async function getOnHandAndActiveReserved(product: Product) {
+  // product já contém merchant_id; não refaça SELECT
+  const productKey = String(product.product_id ?? product);
 
-  const key = product.product_id ?? product.id;
   const activeReserved = await InventoryReservation.sum('qty', {
-    where: { product_id: String(key), state: 'ACTIVE' },
+    where: {
+      merchant_id: product.merchant_id,      // <-- agora existe
+      product_id: productKey,
+      state: 'ACTIVE',
+    },
   }) as number | null;
 
   return {
     onHand: product.on_hand ?? 0,
     activeReserved: activeReserved ?? 0,
     product,
-    productKey: String(key),
+    productKey,
   };
 }
 
@@ -43,9 +46,10 @@ export async function reserveForOrder(params: {
   ifoodProductId: string; // id do catálogo iFood
 }) {
   const { product, channel, orderId, itemKey, qty, merchantId, accessToken, ifoodProductId } = params;
+  
 
   // 1) Ver estado atual
-  const { onHand, activeReserved, productKey } = await getOnHandAndActiveReserved(product.id);
+  const { onHand, activeReserved, productKey } = await getOnHandAndActiveReserved(product);
   // Próximo available após reservar:
   const nextAvailable = computeAvailable(onHand, activeReserved + qty);
 
@@ -53,8 +57,9 @@ export async function reserveForOrder(params: {
   return await sequelize.transaction(async (t: Transaction) => {
     // idempotência: se já existe ACTIVE igual, não duplica
     const [res, created] = await InventoryReservation.findOrCreate({
-      where: { channel, order_id: orderId, item_key: itemKey },
+      where: { merchant_id: merchantId, channel, order_id: orderId, item_key: itemKey },
       defaults: {
+        merchant_id: merchantId,
         product_id: productKey,
         channel,
         order_id: orderId,
@@ -92,7 +97,8 @@ export async function cancelReservation(params: {
   ifoodProductId: string;
 }) {
   const { product, channel, orderId, itemKey, qty, merchantId, accessToken, ifoodProductId } = params;
-  const { onHand, activeReserved } = await getOnHandAndActiveReserved(product.id);
+  
+  const { onHand, activeReserved } = await getOnHandAndActiveReserved(product);
 
   // Busca reserva ACTIVE correspondente
   const res = await InventoryReservation.findOne({
@@ -134,7 +140,7 @@ export async function consumeReservation(params: {
 
   // Carrega reserva ativa
   const res = await InventoryReservation.findOne({
-    where: { channel, order_id: orderId, item_key: itemKey, state: 'ACTIVE' },
+    where: { merchant_id: merchantId, channel, order_id: orderId, item_key: itemKey, state: 'ACTIVE' },
   });
 
   // Sem reserva ativa → não consome físico nem publica
@@ -143,7 +149,7 @@ export async function consumeReservation(params: {
   }
 
   // Situação atual
-  const { onHand, activeReserved } = await getOnHandAndActiveReserved(product.id);
+  const { onHand, activeReserved } = await getOnHandAndActiveReserved(product);
 
   // Após CON:
   // on_hand' = on_hand - res.qty
@@ -178,7 +184,7 @@ export async function pdvAdjustOnHand(params: {
   ifoodProductId: string;
 }) {
   const { product, delta, merchantId, accessToken, ifoodProductId } = params;
-  const { onHand, activeReserved } = await getOnHandAndActiveReserved(product.id);
+  const { onHand, activeReserved } = await getOnHandAndActiveReserved(product);
 
   const nextOnHand = Math.max(0, onHand + delta);
   const nextAvailable = computeAvailable(nextOnHand, activeReserved);

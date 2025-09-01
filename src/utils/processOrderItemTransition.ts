@@ -1,16 +1,15 @@
-// utils/processOrderItemTransition.ts
 import { Product } from '../database/models/products';
 import { OrderItem } from '../database/models/orderItem';
 import { getProductIdForIfood } from './getProductIdForIfood';
 import { reserveForOrder, cancelReservation, consumeReservation } from '../services/inventoryService';
 
-type EventCode = 'PLC' | 'CON' | 'CAN';
+type EventCode = 'PLC' | 'CFM' | 'PRS' | 'DSP' | 'CAN' | 'CON';
 
 export async function processOrderItemTransition(params: {
   merchantId: string;
   orderId: string;
   itemExternalCode: string;
-  itemUniqueId?: string; // melhor para itemKey; fallback externalCode
+  itemUniqueId?: string;
   itemQty: number;
   eventCode: EventCode;
   accessToken: string;
@@ -23,87 +22,107 @@ export async function processOrderItemTransition(params: {
     return;
   }
 
-  const orderItem = await OrderItem.findOne({ where: { order_id: orderId, external_code: itemExternalCode } });
+  const orderItem = await OrderItem.findOne({
+    where: { merchant_id: merchantId, order_id: orderId, external_code: itemExternalCode }
+  });
   if (!orderItem) {
-    console.warn(`⚠️ OrderItem não encontrado (order=${orderId}, external=${itemExternalCode})`);
+    console.warn(`⚠️ OrderItem não encontrado (merchant=${merchantId}, order=${orderId}, external=${itemExternalCode})`);
     return;
   }
 
-  // chave idempotente da reserva (use uniqueId do item se houver)
   const itemKey = orderItem.unique_id ?? itemUniqueId ?? itemExternalCode;
 
-  const ifoodProductId = await getProductIdForIfood(merchantId, product);
-  if (!ifoodProductId) {
+  // Apenas eventos que mexem em estoque precisam do productId do iFood
+  const needsIfoodProductId = eventCode === 'CFM' || eventCode === 'CAN' || eventCode === 'CON';
+  const ifoodProductId = needsIfoodProductId ? await getProductIdForIfood(merchantId, product) : null;
+  if (needsIfoodProductId && !ifoodProductId) {
     console.warn(`⚠️ iFood productId não encontrado (merchant=${merchantId}, sku=${product.external_code})`);
     return;
   }
 
-  // Transições
-  if (eventCode === 'PLC') {
-    console.log(`Evento ${eventCode} (Reserva) identificado`);
-    await reserveForOrder({
-      product,
-      channel: 'IFOOD',
-      orderId,
-      itemKey,
-      qty: itemQty,
-      merchantId,
-      accessToken,
-      ifoodProductId,
-    });
+  switch (eventCode) {
+    case 'PLC': {
+      // 📌 NÃO reserva aqui. Só audita item.
+      await orderItem.update({
+        // mantém estado 'NEW'
+        last_event_code: 'PLC',
+        last_event_at: new Date(),
+      });
+      return;
+    }
 
-    // Estado do item para auditoria
-    await orderItem.update({
-      state: 'RESERVED',
-      reserved_qty: (orderItem.reserved_qty ?? 0) + itemQty,
-      last_event_code: 'PLC',
-      last_event_at: new Date(),
-    });
-    return;
-  }
+    case 'CFM': {
+      // ✅ RESERVA idempotente no CONFIRMED
+      await reserveForOrder({
+        product,
+        channel: 'IFOOD',
+        orderId,
+        itemKey,
+        qty: itemQty,
+        merchantId,
+        accessToken,
+        ifoodProductId: ifoodProductId!,
+      });
 
-  if (eventCode === 'CAN') {
-    console.log(`Evento ${eventCode} (Cancelamento) identificado`);
-    const result = await cancelReservation({
-      product,
-      channel: 'IFOOD',
-      orderId,
-      itemKey,
-      qty: itemQty,
-      merchantId,
-      accessToken,
-      ifoodProductId,
-    });
+      await orderItem.update({
+        state: 'RESERVED',
+        reserved_qty: (orderItem.reserved_qty ?? 0) + itemQty,
+        last_event_code: 'CFM',
+        last_event_at: new Date(),
+      });
+      return;
+    }
 
-    // NEW → CANCELLED (sem reserva) não mexe stock
-    await orderItem.update({
-      state: 'CANCELLED',
-      cancelled_qty: result.skipped ? (orderItem.cancelled_qty ?? 0) : (orderItem.cancelled_qty ?? 0) + itemQty,
-      last_event_code: 'CAN',
-      last_event_at: new Date(),
-    });
-    return;
-  }
+    case 'CAN': {
+      const result = await cancelReservation({
+        product,
+        channel: 'IFOOD',
+        orderId,
+        itemKey,
+        qty: itemQty,
+        merchantId,
+        accessToken,
+        ifoodProductId: ifoodProductId!,
+      });
 
-  if (eventCode === 'CON') {
-    console.log(`Evento ${eventCode} (Concluido) identificado`);
-    const result = await consumeReservation({
-      product,
-      channel: 'IFOOD',
-      orderId,
-      itemKey,
-      merchantId,
-      accessToken,
-      ifoodProductId,
-    });
-    const consumedQty = result.skipped ? 0 : ((result as any).qty ?? itemQty);
-    // Sem reserva ativa, não baixa físico
-    await orderItem.update({
-      state: 'CONCLUDED',
-      concluded_qty: (orderItem.concluded_qty ?? 0) + consumedQty,
-      last_event_code: 'CON',
-      last_event_at: new Date(),
-    });
-    return;
+      await orderItem.update({
+        state: 'CANCELLED',
+        cancelled_qty: result.skipped ? (orderItem.cancelled_qty ?? 0) : (orderItem.cancelled_qty ?? 0) + itemQty,
+        last_event_code: 'CAN',
+        last_event_at: new Date(),
+      });
+      return;
+    }
+
+    case 'CON': {
+      const result = await consumeReservation({
+        product,
+        channel: 'IFOOD',
+        orderId,
+        itemKey,
+        merchantId,
+        accessToken,
+        ifoodProductId: ifoodProductId!,
+      });
+
+      const consumedQty = result.skipped ? 0 : ((result as any).qty ?? itemQty);
+      await orderItem.update({
+        state: 'CONCLUDED',
+        concluded_qty: (orderItem.concluded_qty ?? 0) + consumedQty,
+        last_event_code: 'CON',
+        last_event_at: new Date(),
+      });
+      return;
+    }
+
+    case 'PRS': { // PREPARATION_STARTED
+      await orderItem.update({ last_event_code: 'PRS', last_event_at: new Date() });
+      return;
+    }
+
+    case 'DSP': { // DISPATCHED
+      await orderItem.update({ last_event_code: 'DSP', last_event_at: new Date() });
+      return;
+    }
   }
 }

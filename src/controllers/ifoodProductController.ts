@@ -1,16 +1,17 @@
 import { Request, Response } from 'express';
 import { IfoodAuthService } from '../services/ifoodAuthService';
 import { IfoodProductService } from '../services/ifoodProductService';
+import { pickQueryString } from '../utils/pickQueryString';
 
 export const syncIfoodItems = async (req: Request, res: Response) => {
-  const { merchantId } = req.query;
+  const merchantId = pickQueryString(req.query.merchantId);
 
   if (!merchantId) {
     return res.status(400).json({ error: 'merchantId é obrigatório' });
   }
 
   try {
-    const { access_token } = await IfoodAuthService.getAccessToken();
+    const { access_token } = await IfoodAuthService.getAccessToken(merchantId);
 
     const result = await IfoodProductService.syncAllCatalogs(
       merchantId.toString(),
@@ -28,7 +29,7 @@ export const syncIfoodItems = async (req: Request, res: Response) => {
 };
 
 export const getProductByExternalCode = async (req: Request, res: Response) => {
-  const { merchantId } = req.query;
+  const merchantId = pickQueryString(req.query.merchantId);
   const { externalCode } = req.params;
 
   if (!merchantId) {
@@ -36,7 +37,7 @@ export const getProductByExternalCode = async (req: Request, res: Response) => {
   }
 
   try {
-    const { access_token } = await IfoodAuthService.getAccessToken();
+    const { access_token } = await IfoodAuthService.getAccessToken(merchantId);
 
     const product = await IfoodProductService.getProductByExternalCode(
       merchantId.toString(),
@@ -52,7 +53,7 @@ export const getProductByExternalCode = async (req: Request, res: Response) => {
 };
 
 export const getProductById = async (req: Request, res: Response) => {
-  const { merchantId } = req.query;
+  const merchantId = pickQueryString(req.query.merchantId);
   const { productId } = req.params;
 
   if (!merchantId) {
@@ -60,7 +61,7 @@ export const getProductById = async (req: Request, res: Response) => {
   }
 
   try {
-    const { access_token } = await IfoodAuthService.getAccessToken();
+    const { access_token } = await IfoodAuthService.getAccessToken(merchantId);
 
     const product = await IfoodProductService.getProductById(
       merchantId.toString(),

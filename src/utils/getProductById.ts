@@ -11,7 +11,7 @@ export async function getProductById(
   ean?: string
 ): Promise<string | null> {
   if (!externalCode && !ean) return null;
-
+  
   const product = await Product.findOne({
     where: {
       merchant_id: merchantId,
