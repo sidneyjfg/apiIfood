@@ -2,9 +2,9 @@ import { Router } from 'express';
 import { getToken } from '../controllers/ifoodAuthController';
 import { handleIfoodWebhook } from '../controllers/webhookController';
 import {
-    syncIfoodItems,
-    getProductByExternalCode,
-    getProductById
+  syncIfoodItems,
+  getProductByExternalCode,
+  getProductById
 } from '../controllers/ifoodProductController';
 
 const router = Router();
@@ -13,36 +13,62 @@ const router = Router();
  * @swagger
  * /webhook/ifood:
  *   post:
- *     summary: Webhook de pedidos do iFood
- *     description: Recebe pedidos confirmados do iFood e atualiza o ERP.
+ *     summary: Webhook de eventos do iFood
+ *     description: Recebe eventos de pedido do iFood (ex.: PLC, CAN, CON) e processa estoque/snapshot por loja.
+ *     tags:
+ *       - iFood Webhook
  *     requestBody:
  *       required: true
  *       content:
  *         application/json:
  *           schema:
  *             type: object
- *             example:
- *               id: "123"
- *               items:
- *                 - name: "Pizza"
- *                   quantity: 2
- *                   externalCode: "SKU123"
+ *             properties:
+ *               code:
+ *                 type: string
+ *                 description: Código curto do evento (PLC, CAN, CON, etc.)
+ *                 example: PLC
+ *               fullCode:
+ *                 type: string
+ *                 description: Código completo do evento
+ *                 example: PLACED
+ *               orderId:
+ *                 type: string
+ *                 description: ID do pedido no iFood
+ *                 example: d7bc9aa1-2dd4-42c3-8677-b884ed68b1dd
+ *               merchantId:
+ *                 type: string
+ *                 description: merchantId da loja no iFood
+ *                 example: 2a65a2fa-d8c5-4787-a9cb-4894a7a68cbe
+ *               salesChannel:
+ *                 type: string
+ *                 description: Canal de venda
+ *                 example: IFOOD
  *     responses:
  *       200:
- *         description: Pedido processado com sucesso
+ *         description: Evento processado (ou ignorado) com sucesso
+ *       400:
+ *         description: Payload inválido
+ *       500:
+ *         description: Erro interno ao processar webhook
  */
 router.post('/webhook/ifood', handleIfoodWebhook);
 
 /**
  * @swagger
- * /token/ifood:
+ * /ifood/token:
  *   get:
- *     summary: Obtém ou reutiliza o token de autenticação do iFood
- *     description: >
- *       Retorna um token OAuth válido da API do iFood, reutilizando um salvo se ainda estiver válido.
- *       Indica o tempo restante em segundos até a expiração do token.
+ *     summary: Obtém ou reutiliza o token do iFood para uma loja (merchant)
+ *     description: Retorna um token OAuth válido. Reutiliza um token salvo se ainda estiver válido.
  *     tags:
- *       - iFood
+ *       - iFood Auth
+ *     parameters:
+ *       - in: query
+ *         name: merchantId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: merchantId da loja no iFood
  *     responses:
  *       200:
  *         description: Token válido retornado com sucesso
@@ -60,6 +86,8 @@ router.post('/webhook/ifood', handleIfoodWebhook);
  *                 expires_in:
  *                   type: integer
  *                   example: 21599
+ *       400:
+ *         description: Parâmetro merchantId ausente
  *       500:
  *         description: Erro ao obter token
  */
@@ -69,8 +97,8 @@ router.get('/ifood/token', getToken);
  * @swagger
  * /ifood/items/sync:
  *   get:
- *     summary: Sincroniza os itens do iFood
- *     description: Busca todos os itens (ofertas de produtos visíveis) de todas as categorias do catálogo e salva no banco sem duplicar.
+ *     summary: Sincroniza itens do catálogo do iFood para a loja
+ *     description: Busca todos os catálogos do merchant e sincroniza os itens (ofertas) no banco, sem duplicar.
  *     tags:
  *       - iFood Items
  *     parameters:
@@ -79,18 +107,28 @@ router.get('/ifood/token', getToken);
  *         required: true
  *         schema:
  *           type: string
- *         description: ID do merchant
- *       - in: query
- *         name: catalogId
- *         required: true
- *         schema:
- *           type: string
- *         description: ID do catálogo
+ *         description: merchantId da loja no iFood
  *     responses:
  *       200:
  *         description: Itens sincronizados com sucesso
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: Itens sincronizados com sucesso
+ *                 total_inserted:
+ *                   type: integer
+ *                   example: 42
+ *       400:
+ *         description: Parâmetro merchantId ausente
+ *       500:
+ *         description: Erro ao sincronizar itens
  */
 router.get('/ifood/items/sync', syncIfoodItems);
+
 /**
  * @swagger
  * /ifood/products/external/{externalCode}:
@@ -104,16 +142,26 @@ router.get('/ifood/items/sync', syncIfoodItems);
  *         required: true
  *         schema:
  *           type: string
- *         description: Código externo do produto
+ *         description: Código externo do produto (SKU no catálogo)
  *       - in: query
  *         name: merchantId
  *         required: true
  *         schema:
  *           type: string
- *         description: ID do merchant
+ *         description: merchantId da loja no iFood
  *     responses:
  *       200:
- *         description: Produto encontrado com sucesso
+ *         description: Produto encontrado
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *       400:
+ *         description: Parâmetro merchantId ausente
+ *       404:
+ *         description: Produto não encontrado
+ *       500:
+ *         description: Erro ao buscar produto por código externo
  */
 router.get('/ifood/products/external/:externalCode', getProductByExternalCode);
 
@@ -130,16 +178,26 @@ router.get('/ifood/products/external/:externalCode', getProductByExternalCode);
  *         required: true
  *         schema:
  *           type: string
- *         description: ID do produto
+ *         description: ID do produto no iFood (productId do catálogo)
  *       - in: query
  *         name: merchantId
  *         required: true
  *         schema:
  *           type: string
- *         description: ID do merchant
+ *         description: merchantId da loja no iFood
  *     responses:
  *       200:
- *         description: Produto encontrado com sucesso
+ *         description: Produto encontrado
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *       400:
+ *         description: Parâmetro merchantId ausente
+ *       404:
+ *         description: Produto não encontrado
+ *       500:
+ *         description: Erro ao buscar produto por ID
  */
 router.get('/ifood/products/:productId', getProductById);
 
