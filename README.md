@@ -80,27 +80,53 @@ FLUSH PRIVILEGES;
 
 ## 📦 Models (resumo)
 
-- **Product**: catálogo/estoque por loja (`on_hand` = físico; disponível = `on_hand` − reservas ativas).  
+- **Product**: catálogo/estoque por loja.  
+  - `on_hand` = estoque físico local.  
+  - `available` (calculado) = `on_hand` − reservas ativas.  
+  - `status` = espelho do iFood (**AVAILABLE/UNAVAILABLE**), ajustado pela regra acima.
+
 - **Order**: snapshot do pedido iFood por loja (campos `status`, `last_event_code`, `last_event_at`, `order_id`).  
 - **OrderItem**: estado por item (`NEW` → `RESERVED` → `CONCLUDED` / `CANCELLED`) e contadores.  
 - **InventoryReservation**: reservas por (`merchant_id`, `product_id`, `order_id`, `item_key`).  
 - **AuthToken**: OAuth por loja (**UNIQUE (`merchant_id`,`provider`)**).  
 - **StockLog**: auditoria de estoque por loja.
 
-## 🔄 Fluxo de Estoque (PLC / CAN / CON)
+## 🔄 Fluxo de Estoque (eventos do iFood)
 
 - **PLC (PLACED)**  
-  - Cria/garante **reserva ACTIVE** (idempotente por `merchant_id + channel + order_id + item_key`).  
-  - Publica `available` no iFood: `on_hand - reservas_ativas`.  
-  - Item: `state = RESERVED`, `reserved_qty += qty`.
+  Nada de estoque aqui. Apenas registra o pedido/itens (auditoria).
+
+- **CFM (CONFIRMED)**  
+  Faz **reserva** do item (idempotente por `merchant_id + channel + order + item`), recalcula o **available** (`on_hand - reservas_ativas`) e publica no iFood.
+
 - **CAN (CANCELLED)**  
-  - Se houver reserva ACTIVE → marca `CANCELLED`, publica novo `available`.  
-  - Se **não** houver reserva → não mexe físico; apenas item `state = CANCELLED`.
+  Se existir **reserva ativa**, marca como cancelada e **devolve** o available no iFood.
+
 - **CON (CONCLUDED)**  
-  - Se houver ACTIVE → **consome** reserva (ACTIVE → CONSUMED), baixa `on_hand`, publica `available` (tende a ficar igual).  
-  - Se **não** houver reserva → **não baixa físico**; item `CONCLUDED`.
+  **Consome** a reserva ativa (vira CONSUMED) e dá **baixa no on_hand**. O available geralmente fica igual (reserva vira consumo físico).
+
+- **PRS (PREPARATION_STARTED)**, **DSP (DISPATCHED)**  
+  Apenas trilha de status; **não mexe** em estoque.
+
 
 > Toda publicação ao iFood usa `merchantId` e o **productId do iFood** (não o SKU).
+
+## ✅ Disponibilidade x Status (quem liga/desliga o produto)
+
+- **available** = `on_hand - reservas_ativas`.
+- Se `available > 0` → **AVAILABLE** (ligado no iFood)  
+  Se `available = 0` → **UNAVAILABLE** (desligado no iFood)
+
+A API aplica isso automaticamente com:
+- `IfoodCatalogStatusService.ensureStatusByAvailability(...)`
+  - Faz `PATCH /catalog/v2.0/merchants/{merchantId}/products/status`
+    com `{ externalCode, status }`.
+  - Aguarda o **batch** `GET /catalog/v2.0/merchants/{merchantId}/batch/{batchId}`.
+  - Se **SUCCESS**, atualiza `products.status` no banco.
+
+> Observação: o **estoque publicado** usa o **productId do iFood**.  
+> O **status (ligar/desligar)** usa o **externalCode**.
+
 
 ## 📡 Endpoints
 
@@ -110,14 +136,31 @@ FLUSH PRIVILEGES;
 - `GET /ifood/token?merchantId={id}`  
   Retorna token válido por loja (reutiliza se ainda válido).
 
-- `GET /ifood/items/sync?merchantId={id}`  
-  Percorre **todos os catálogos da loja**, traz **todas as categorias** com `includeItems=true` e faz **upsert** em `products` (por loja), além de logar mudanças de `on_hand`.
+- `GET /ifood/items/sync`  
+  Sincroniza catálogos/itens para **todas** as lojas ativas e grava/atualiza `products` por `merchant_id`.
+
 
 - `GET /ifood/products/external/:externalCode?merchantId={id}`  
   Busca produto no iFood por **externalCode** para a loja.
 
 - `GET /ifood/products/:productId?merchantId={id}`  
   Busca produto no iFood por **productId** para a loja.
+
+## 🌐 Endpoints iFood (v2.0)
+
+- **Estoque (available)**  
+  `PATCH /catalog/v2.0/merchants/{merchantId}/inventory/{productId}`  
+  (implementado em `updateIfoodStock`)
+
+- **Status do produto (AVAILABLE/UNAVAILABLE)**  
+  `PATCH /catalog/v2.0/merchants/{merchantId}/products/status`  
+  `GET   /catalog/v2.0/merchants/{merchantId}/batch/{batchId}`  
+  (implementado em `IfoodCatalogStatusService`)
+
+- **Catálogos/Categorias/Itens**  
+  `GET /catalog/v2.0/merchants/{merchantId}/catalogs`  
+  `GET /catalog/v2.0/merchants/{merchantId}/catalogs/{catalogId}/categories?includeItems=true`
+
 
 ## 📚 Swagger
 

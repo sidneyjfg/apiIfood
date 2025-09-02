@@ -1,13 +1,10 @@
-# SQL Scripts para Auditoria e Controle de Estoque (Multi-loja)
-# Banco: MySQL 8+
-# Observações:
-# - Sempre filtrar por :MERCHANT_ID para isolar uma loja.
-# - Substitua :SKU e :ORDER_ID quando indicado.
-# - Padronize reservations para usar SEMPRE o product_id do iFood quando possível.
+# SQL de Auditoria e Estoque (Multi-loja)
+# Como usar: sempre passe o :MERCHANT_ID da loja (e :SKU / :ORDER_ID quando for o caso).
 
-/* ===============================
-   0) View canônica do estoque
-   =============================== */
+/* 0) VISÃO PRINCIPAL DE ESTOQUE
+   Mostra 1 linha por produto: SKU, nome, físico (on_hand),
+   quanto está reservado e quanto sobra (available).
+*/
 CREATE OR REPLACE VIEW product_inventory_view AS
 SELECT
   p.id,
@@ -26,9 +23,9 @@ LEFT JOIN inventory_reservations r
 GROUP BY
   p.id, p.product_id, p.merchant_id, p.external_code, p.ean, p.name, p.on_hand;
 
-/* ===============================
-   1) Visão geral por SKU (por loja)
-   =============================== */
+/* 1) ESTOQUE POR SKU (DA LOJA)
+   Lista SKU, nome, físico, reservas ativas e o que sobra (available) dessa loja.
+*/
 SELECT
   p.external_code AS sku,
   p.name,
@@ -43,9 +40,9 @@ WHERE p.merchant_id = :MERCHANT_ID
 GROUP BY p.external_code, p.name, p.on_hand
 ORDER BY p.external_code;
 
-/* ===============================================
-   2) Detalhe de reservas ativas por SKU/pedido
-   =============================================== */
+/* 2) RESERVAS ATIVAS (DETALHADAS)
+   Mostra, por SKU, as reservas abertas: canal, pedido, item e quantidade.
+*/
 SELECT
   p.external_code AS sku,
   r.channel,
@@ -63,9 +60,9 @@ WHERE r.state = 'ACTIVE'
   AND p.merchant_id = :MERCHANT_ID
 ORDER BY p.external_code, r.created_at DESC;
 
-/* ===============================
-   3) Painel por pedido (itens)
-   =============================== */
+/* 3) ITENS DE PEDIDO (PAINEL)
+   Lista os itens dos pedidos da loja (quantidades, estado e último evento).
+*/
 SELECT
   oi.merchant_id,
   oi.order_id,
@@ -83,10 +80,10 @@ WHERE oi.merchant_id = :MERCHANT_ID
   AND (:ORDER_ID IS NULL OR oi.order_id = :ORDER_ID)
 ORDER BY oi.order_id, oi.external_code;
 
-/* ===============================
-   4) Auditoria de consistência
-   =============================== */
--- CANCELLED sem reserva
+/* 4) ALERTAS DE CONSISTÊNCIA
+   A) Itens CANCELLED sem reserva registrada.
+   B) Itens CONCLUDED sem reserva registrada.
+*/
 SELECT
   oi.merchant_id, oi.order_id, oi.external_code AS sku,
   oi.state, oi.reserved_qty, oi.cancelled_qty,
@@ -96,7 +93,6 @@ WHERE oi.merchant_id = :MERCHANT_ID
   AND oi.state = 'CANCELLED'
   AND COALESCE(oi.reserved_qty, 0) = 0;
 
--- CONCLUDED sem reserva
 SELECT
   oi.merchant_id, oi.order_id, oi.external_code AS sku,
   oi.state, oi.reserved_qty, oi.concluded_qty,
@@ -106,9 +102,9 @@ WHERE oi.merchant_id = :MERCHANT_ID
   AND oi.state = 'CONCLUDED'
   AND COALESCE(oi.reserved_qty, 0) = 0;
 
-/* ================================================
-   5) Conciliar available com reservas (por loja)
-   ================================================ */
+/* 5) CONFERIR AVAILABLE x RESERVAS
+   Recalcula o available usando reservas ativas consolidadas e compara.
+*/
 SELECT
   p.merchant_id,
   p.external_code AS sku,
@@ -129,9 +125,9 @@ LEFT JOIN (
 WHERE p.merchant_id = :MERCHANT_ID
 ORDER BY p.external_code;
 
-/* ===============================
-   6) Resumo dos logs (por loja)
-   =============================== */
+/* 6) RESUMO DOS LOGS
+   Variações registradas em logs por SKU (reservas, cancelamentos, baixas).
+*/
 SELECT
   merchant_id,
   product_sku AS sku,
@@ -144,9 +140,9 @@ WHERE merchant_id = :MERCHANT_ID
 GROUP BY merchant_id, product_sku
 ORDER BY product_sku;
 
-/* ==================================
-   7) Linha do tempo de um SKU
-   ================================== */
+/* 7) LINHA DO TEMPO DO SKU
+   Mostra os logs (mais recentes primeiro) de um SKU específico.
+*/
 SELECT
   created_at,
   source,
@@ -160,9 +156,9 @@ WHERE merchant_id = :MERCHANT_ID
   AND product_sku = :SKU
 ORDER BY created_at DESC;
 
-/* ===================================================
-   8) Diferença entre estoque atual e último log
-   =================================================== */
+/* 8) ESTOQUE ATUAL x ÚLTIMO LOG
+   Compara o on_hand do produto com o último valor logado.
+*/
 SELECT
   p.merchant_id,
   p.external_code AS sku,
@@ -178,18 +174,18 @@ LEFT JOIN (
     FROM stock_logs
     GROUP BY merchant_id, product_sku
   ) m
-    ON m.merchant_id = t.merchant_id
-   AND m.product_sku = t.product_sku
-   AND m.max_created = t.created_at
+      ON m.merchant_id = t.merchant_id
+     AND m.product_sku = t.product_sku
+     AND m.max_created = t.created_at
 ) sl
-  ON sl.merchant_id = p.merchant_id
- AND sl.product_sku = p.external_code
+    ON sl.merchant_id = p.merchant_id
+   AND sl.product_sku = p.external_code
 WHERE p.merchant_id = :MERCHANT_ID
 ORDER BY p.external_code;
 
-/* ===================================================
-   9) Reservas ativas sem item correspondente
-   =================================================== */
+/* 9) RESERVAS ATIVAS SEM ITEM DE PEDIDO
+   Achados de reservas sem ordem/item correspondente.
+*/
 SELECT
   r.merchant_id,
   r.product_id,
@@ -209,9 +205,9 @@ WHERE r.merchant_id = :MERCHANT_ID
   AND oi.id IS NULL
 ORDER BY r.created_at DESC;
 
-/* ==============================================
-   10) Itens reservados sem reserva ativa
-   ============================================== */
+/* 10) ITENS COM RESERVA "FANTASMA"
+   Itens que têm reserved_qty > 0, mas não existe reserva ativa ligada a eles.
+*/
 SELECT
   oi.merchant_id,
   oi.order_id,
@@ -232,9 +228,9 @@ WHERE oi.merchant_id = :MERCHANT_ID
   AND r.id IS NULL
 ORDER BY oi.last_event_at DESC;
 
-/* ===================================================
-   11) Conferência de um pedido específico
-   =================================================== */
+/* 11) CONFERÊNCIA DE UM PEDIDO
+   Mostra available calculado dos SKUs daquele pedido.
+*/
 SELECT
   oi.merchant_id,
   oi.order_id,
@@ -254,9 +250,9 @@ WHERE oi.merchant_id = :MERCHANT_ID
 GROUP BY oi.merchant_id, oi.order_id, oi.external_code, p.on_hand
 ORDER BY oi.external_code;
 
-/* ===================================================
-   12) Top SKUs com maior reserva ativa
-   =================================================== */
+/* 12) TOP SKUs MAIS RESERVADOS
+   Traz os 20 SKUs com maior reserva ativa na loja.
+*/
 SELECT
   piv.merchant_id,
   piv.sku,
@@ -269,9 +265,7 @@ WHERE piv.merchant_id = :MERCHANT_ID
 ORDER BY piv.reserved DESC
 LIMIT 20;
 
-/* ===============================
-   Índices sugeridos
-   ===============================
+/* ÍNDICES SUGERIDOS (melhorar performance e evitar duplicidades)
 products:
   UNIQUE (merchant_id, external_code)
   UNIQUE (merchant_id, product_id)

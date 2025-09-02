@@ -4,6 +4,7 @@ import { sequelize } from '../config/database';
 import { Product } from '../database/models/products';
 import { InventoryReservation } from '../database/models/inventoryReservation';
 import { updateIfoodStock } from './ifoodStockService';
+import { IfoodCatalogStatusService } from './ifoodCatalogStatusService';
 
 type Channel = 'IFOOD' | 'PDV' | 'MANUAL';
 type ReservationState = 'ACTIVE' | 'CANCELLED' | 'CONSUMED';
@@ -46,7 +47,7 @@ export async function reserveForOrder(params: {
   ifoodProductId: string; // id do catálogo iFood
 }) {
   const { product, channel, orderId, itemKey, qty, merchantId, accessToken, ifoodProductId } = params;
-  
+
 
   // 1) Ver estado atual
   const { onHand, activeReserved, productKey } = await getOnHandAndActiveReserved(product);
@@ -78,7 +79,17 @@ export async function reserveForOrder(params: {
     // Publica available
     const ok = await updateIfoodStock(merchantId, ifoodProductId, nextAvailable, accessToken);
     if (!ok) throw new Error('Falha ao publicar estoque no iFood');
-
+    // 🔸 ajuste de status por disponibilidade
+    try {
+      await IfoodCatalogStatusService.ensureStatusByAvailability(
+        merchantId,
+        product,
+        nextAvailable,
+        accessToken
+      );
+    } catch (e: any) {
+      console.warn('⚠️ ensureStatusByAvailability falhou (reserveForOrder):', e?.message || e);
+    }
     return true;
   });
 }
@@ -88,40 +99,51 @@ export async function reserveForOrder(params: {
  */
 export async function cancelReservation(params: {
   product: Product;
-  channel: Channel;
+  channel: 'IFOOD' | 'PDV' | 'MANUAL';
   orderId: string;
   itemKey: string;
-  qty: number; // qty esperado; validamos com a reserva
+  qty: number;
   merchantId: string;
   accessToken: string;
   ifoodProductId: string;
 }) {
-  const { product, channel, orderId, itemKey, qty, merchantId, accessToken, ifoodProductId } = params;
-  
+  const { product, channel, orderId, itemKey, merchantId, accessToken, ifoodProductId } = params;
+
   const { onHand, activeReserved } = await getOnHandAndActiveReserved(product);
 
-  // Busca reserva ACTIVE correspondente
+  // ✅ incluir o merchantId no filtro
   const res = await InventoryReservation.findOne({
-    where: { channel, order_id: orderId, item_key: itemKey, state: 'ACTIVE' },
+    where: { merchant_id: merchantId, channel, order_id: orderId, item_key: itemKey, state: 'ACTIVE' },
   });
 
-  // ❗ Cancel sem reserva ativa → não mexe estoque nem publica (evita somar indevidamente)
   if (!res) {
     return { skipped: true };
   }
 
-  // Próximo available após cancelar:
   const nextAvailable = computeAvailable(onHand, Math.max(0, activeReserved - res.qty));
 
+  // ✅ agora existe 't' no escopo
   return await sequelize.transaction(async (t: Transaction) => {
     await res.update({ state: 'CANCELLED' }, { transaction: t });
 
     const ok = await updateIfoodStock(merchantId, ifoodProductId, nextAvailable, accessToken);
     if (!ok) throw new Error('Falha ao publicar estoque no iFood');
 
+    try {
+      await IfoodCatalogStatusService.ensureStatusByAvailability(
+        merchantId,
+        product,
+        nextAvailable,
+        accessToken
+      );
+    } catch (e: any) {
+      console.warn('⚠️ ensureStatusByAvailability falhou (cancelReservation):', e?.message || e);
+    }
+
     return { skipped: false };
   });
 }
+
 
 /**
  * CON → consumir a reserva (ACTIVE → CONSUMED) e baixar o físico (on_hand -= qty)
@@ -138,36 +160,34 @@ export async function consumeReservation(params: {
 }) {
   const { product, channel, orderId, itemKey, merchantId, accessToken, ifoodProductId } = params;
 
-  // Carrega reserva ativa
   const res = await InventoryReservation.findOne({
     where: { merchant_id: merchantId, channel, order_id: orderId, item_key: itemKey, state: 'ACTIVE' },
   });
 
-  // Sem reserva ativa → não consome físico nem publica
-  if (!res) {
-    return { skipped: true };
-  }
+  if (!res) return { skipped: true };
 
-  // Situação atual
   const { onHand, activeReserved } = await getOnHandAndActiveReserved(product);
-
-  // Após CON:
-  // on_hand' = on_hand - res.qty
-  // reserved' = activeReserved - res.qty
-  // available' = (on_hand - res.qty) - (activeReserved - res.qty) = on_hand - activeReserved (mesmo valor)
   const nextAvailable = computeAvailable(onHand, activeReserved);
 
   return await sequelize.transaction(async (t: Transaction) => {
-    // 1) marcar reserva consumida
     await res.update({ state: 'CONSUMED' }, { transaction: t });
-
-    // 2) baixar físico
     product.on_hand = Math.max(0, (product.on_hand ?? 0) - res.qty);
     await product.save({ transaction: t });
 
-    // 3) publicar available (mesmo valor, mas mantém consistência)
     const ok = await updateIfoodStock(merchantId, ifoodProductId, nextAvailable, accessToken);
     if (!ok) throw new Error('Falha ao publicar estoque no iFood');
+
+    // 🔸 ajuste de status por disponibilidade (mantém coerência)
+    try {
+      await IfoodCatalogStatusService.ensureStatusByAvailability(
+        merchantId,
+        product,
+        nextAvailable,
+        accessToken
+      );
+    } catch (e: any) {
+      console.warn('⚠️ ensureStatusByAvailability falhou (consumeReservation):', e?.message || e);
+    }
 
     return { skipped: false };
   });
@@ -195,6 +215,18 @@ export async function pdvAdjustOnHand(params: {
 
     const ok = await updateIfoodStock(merchantId, ifoodProductId, nextAvailable, accessToken);
     if (!ok) throw new Error('Falha ao publicar estoque no iFood');
+
+    // 🔸 ajuste de status por disponibilidade
+    try {
+      await IfoodCatalogStatusService.ensureStatusByAvailability(
+        merchantId,
+        product,
+        nextAvailable,
+        accessToken
+      );
+    } catch (e: any) {
+      console.warn('⚠️ ensureStatusByAvailability falhou (pdvAdjustOnHand):', e?.message || e);
+    }
 
     return true;
   });

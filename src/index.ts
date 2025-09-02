@@ -5,6 +5,7 @@ import { sequelize } from './config/database';
 
 // se você salvou nesses caminhos no passo anterior:
 import { ensureEnvReady } from './bootstrap/envCheck';
+import { startUnsellableCron } from './jobs/unsellableCron';
 
 (async () => {
   try {
@@ -15,6 +16,7 @@ import { ensureEnvReady } from './bootstrap/envCheck';
     await sequelize.authenticate();
     console.log('Conectado ao MySQL com sucesso.');
 
+    startUnsellableCron()
     // 3) sobe o servidor
     const PORT = Number(process.env.PORT || 3000);
     const server = app.listen(PORT, () => {
