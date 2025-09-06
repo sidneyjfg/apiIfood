@@ -1,7 +1,7 @@
 // // src/jobs/orderRetryJob.ts
 // import { Job } from 'bullmq';
 // import axios from 'axios';
-// import { IfoodAuthService } from '../services/ifoodAuthService';
+// import { IfoodAuthService } from '../modules/authentication/services/ifoodAuthService';
 
 // const MAX_ATTEMPTS = 10;
 // const DELAY_BASE_MS = 5000; // Exponential backoff base: 5s

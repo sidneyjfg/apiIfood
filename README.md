@@ -267,7 +267,7 @@ If your rule should **also** prevent turning items on/off on iFood, add this gua
 your status calls (usually in `IfoodCatalogStatusService.ensureStatusByAvailability` or where it's called):
 
 ```ts
-import { controlsIfoodStockInERP } from '../utils/featureFlags';
+import { controlsIfoodStockInERP } from '@core/utils/featureFlags';
 
 if (controlsIfoodStockInERP()) {
   console.log('🔕 [CONTROLA_IFOOD_ESTOQUE=1] PULANDO atualização de status no iFood.');

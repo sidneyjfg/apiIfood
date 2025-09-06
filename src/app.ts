@@ -3,7 +3,7 @@ import dotenv from 'dotenv';
 import routes from './routes';
 import swaggerUi from 'swagger-ui-express';
 import { swaggerSpec } from './config/swagger';
-import { rawBodyMiddleware } from './middlewares/rawBodyMiddleware';
+import { rawBodyMiddleware } from '@core/middlewares/rawBodyMiddleware';
 
 dotenv.config();
 

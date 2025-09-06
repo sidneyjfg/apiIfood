@@ -1,10 +1,17 @@
+// src/routes/index.ts
 import { Router } from 'express';
-import ifoodRoutes from './ifoodRoutes';
-import lojasRoutes from './storeRoutes';
+import merchantRoutes from '../modules/merchant/routes';
+import storeConfigRoutes from '../modules/merchant/routes';
+import catalogRoutes from '../modules/catalog/routes';
+import orderRoutes from '../modules/orders/routes';
+import eventsRoutes from '../modules/events/routes';
 
 const router = Router();
 
-router.use('/', ifoodRoutes);    // suas rotas antigas
-router.use('/storeConfig', lojasRoutes); // nova raiz para buscar lojas
+router.use('/merchants', merchantRoutes);
+router.use('/storeConfig', storeConfigRoutes);
+router.use('/', catalogRoutes);          // mantém endpoints /ifood/* existentes
+router.use('/', orderRoutes);            // mantém /webhook/ifood
+router.use('/events', eventsRoutes);
 
 export default router;

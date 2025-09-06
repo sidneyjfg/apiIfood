@@ -1,5 +1,5 @@
 import cron from 'node-cron';
-import { IfoodUnsellableReactivationService } from '../services/ifoodUnsellableReactivationService';
+import { IfoodUnsellableReactivationService } from '../modules/catalog/services/ifoodUnsellableReactivationService';
 
 export function startUnsellableCron() {
   // a cada 5 minutos

@@ -1,16 +1,27 @@
 {
-    "compilerOptions": {
-        "target": "ES2020",
-        "module": "CommonJS",
-        "rootDir": "src",
-        "outDir": "dist",
-        "esModuleInterop": true,
-        "forceConsistentCasingInFileNames": true,
-        "strict": true,
-        "skipLibCheck": true,
-        "typeRoots": [
-            "./node_modules/@types",
-            "./src/types"
-        ]
-    }
+  "compilerOptions": {
+    "target": "ES2020",
+    "module": "CommonJS",
+    "rootDir": "src",
+    "outDir": "dist",
+    "esModuleInterop": true,
+    "forceConsistentCasingInFileNames": true,
+    "strict": true,
+    "skipLibCheck": true,
+
+    // 👇 ajuste aqui: types agora ficam em src/core/types
+    "typeRoots": [
+      "./node_modules/@types",
+      "./src/core/types"
+    ],
+
+    // 👇 estes já estão ok e casam com a nova estrutura
+    "baseUrl": "src",
+    "paths": {
+      "@core/*": ["core/*"],
+      "@modules/*": ["modules/*"],
+      "@config/*": ["config/*"],
+      "@db/*": ["database/*"] 
+   }
+  }
 }
