@@ -1,25 +1,24 @@
 // services/inventoryService.ts
-import { Transaction, Op } from 'sequelize';
+import { Transaction } from 'sequelize';
 import { sequelize } from '../config/database';
 import { Product } from '../database/models/products';
 import { InventoryReservation } from '../database/models/inventoryReservation';
 import { updateIfoodStock } from './ifoodStockService';
 import { IfoodCatalogStatusService } from './ifoodCatalogStatusService';
+import { controlsIfoodStockInERP } from '../utils/featureFlags';
+import { ErpInventoryService } from './erpStoreService';
 
 type Channel = 'IFOOD' | 'PDV' | 'MANUAL';
-type ReservationState = 'ACTIVE' | 'CANCELLED' | 'CONSUMED';
 
 export async function getOnHandAndActiveReserved(product: Product) {
-  // product já contém merchant_id; não refaça SELECT
-  const productKey = String(product.product_id ?? product);
-
-  const activeReserved = await InventoryReservation.sum('qty', {
+  const productKey = String((product as any).product_id ?? product);
+  const activeReserved = (await InventoryReservation.sum('qty', {
     where: {
-      merchant_id: product.merchant_id,      // <-- agora existe
+      merchant_id: product.merchant_id,
       product_id: productKey,
       state: 'ACTIVE',
     },
-  }) as number | null;
+  })) as number | null;
 
   return {
     onHand: product.on_hand ?? 0,
@@ -34,7 +33,8 @@ export function computeAvailable(onHand: number, activeReserved: number) {
 }
 
 /**
- * PLC → criar/garantir reserva ACTIVE (idempotente por channel+orderId+itemKey)
+ * PLC/CFM → cria/garante reserva ACTIVE (idempotente por channel+orderId+itemKey).
+ * Quando CONTROLA_IFOOD_ESTOQUE=1, NÃO publica available/status no iFood.
  */
 export async function reserveForOrder(params: {
   product: Product;
@@ -48,15 +48,10 @@ export async function reserveForOrder(params: {
 }) {
   const { product, channel, orderId, itemKey, qty, merchantId, accessToken, ifoodProductId } = params;
 
-
-  // 1) Ver estado atual
   const { onHand, activeReserved, productKey } = await getOnHandAndActiveReserved(product);
-  // Próximo available após reservar:
   const nextAvailable = computeAvailable(onHand, activeReserved + qty);
 
-  // 2) Transação: cria/garante reserva ACTIVE (idempotente) e publica ao iFood
   return await sequelize.transaction(async (t: Transaction) => {
-    // idempotência: se já existe ACTIVE igual, não duplica
     const [res, created] = await InventoryReservation.findOrCreate({
       where: { merchant_id: merchantId, channel, order_id: orderId, item_key: itemKey },
       defaults: {
@@ -71,15 +66,19 @@ export async function reserveForOrder(params: {
       transaction: t,
     });
 
-    // Se já existia ACTIVE mas com qty diferente, você pode ajustar aqui (opcional)
     if (!created && res.state === 'ACTIVE' && res.qty !== qty) {
       await res.update({ qty }, { transaction: t });
     }
 
-    // Publica available
+    // Se ERP controla, não publica no iFood
+    if (controlsIfoodStockInERP()) {
+      console.log(`🔕 [ERP controla estoque] PULANDO publicação de available no iFood (reserve). merchant=${merchantId}`);
+      return true;
+    }
+
     const ok = await updateIfoodStock(merchantId, ifoodProductId, nextAvailable, accessToken);
     if (!ok) throw new Error('Falha ao publicar estoque no iFood');
-    // 🔸 ajuste de status por disponibilidade
+
     try {
       await IfoodCatalogStatusService.ensureStatusByAvailability(
         merchantId,
@@ -95,11 +94,11 @@ export async function reserveForOrder(params: {
 }
 
 /**
- * CAN → só pode cancelar se houver ACTIVE; caso contrário, não movimenta nada.
+ * CAN → cancela ACTIVE; se ERP controla, não publica no iFood (apenas estado da reserva).
  */
 export async function cancelReservation(params: {
   product: Product;
-  channel: 'IFOOD' | 'PDV' | 'MANUAL';
+  channel: Channel;
   orderId: string;
   itemKey: string;
   qty: number;
@@ -110,21 +109,21 @@ export async function cancelReservation(params: {
   const { product, channel, orderId, itemKey, merchantId, accessToken, ifoodProductId } = params;
 
   const { onHand, activeReserved } = await getOnHandAndActiveReserved(product);
-
-  // ✅ incluir o merchantId no filtro
   const res = await InventoryReservation.findOne({
     where: { merchant_id: merchantId, channel, order_id: orderId, item_key: itemKey, state: 'ACTIVE' },
   });
 
-  if (!res) {
-    return { skipped: true };
-  }
+  if (!res) return { skipped: true };
 
   const nextAvailable = computeAvailable(onHand, Math.max(0, activeReserved - res.qty));
 
-  // ✅ agora existe 't' no escopo
   return await sequelize.transaction(async (t: Transaction) => {
     await res.update({ state: 'CANCELLED' }, { transaction: t });
+
+    if (controlsIfoodStockInERP()) {
+      console.log(`🔕 [ERP controla estoque] PULANDO publicação de available no iFood (cancel). merchant=${merchantId}`);
+      return { skipped: false };
+    }
 
     const ok = await updateIfoodStock(merchantId, ifoodProductId, nextAvailable, accessToken);
     if (!ok) throw new Error('Falha ao publicar estoque no iFood');
@@ -144,10 +143,10 @@ export async function cancelReservation(params: {
   });
 }
 
-
 /**
- * CON → consumir a reserva (ACTIVE → CONSUMED) e baixar o físico (on_hand -= qty)
- * Observação: available tende a permanecer igual (reserva vira consumo).
+ * CON → consumir a reserva (ACTIVE → CONSUMED) e baixar o físico.
+ * - Flag ON: baixa físico no ERP (De→Para) e NÃO publica iFood; não mexe em products.on_hand.
+ * - Flag OFF: comportamento atual (products.on_hand -= qty, publica iFood).
  */
 export async function consumeReservation(params: {
   product: Product;
@@ -167,17 +166,31 @@ export async function consumeReservation(params: {
   if (!res) return { skipped: true };
 
   const { onHand, activeReserved } = await getOnHandAndActiveReserved(product);
-  const nextAvailable = computeAvailable(onHand, activeReserved);
+  const nextAvailable = computeAvailable(onHand, activeReserved); // reserva vira consumo: available tende a manter
 
   return await sequelize.transaction(async (t: Transaction) => {
     await res.update({ state: 'CONSUMED' }, { transaction: t });
+
+    if (controlsIfoodStockInERP()) {
+      // NÃO altera products.on_hand; baixa o físico no ERP via De→Para
+      await ErpInventoryService.adjustOnHandByMapping({
+        merchantId,
+        externalCode: product.external_code,
+        delta: -res.qty,
+        reason: 'CONSUME_ON_CON',
+        orderId,
+      });
+      console.log(`✅ Baixa física no ERP aplicada (merchant=${merchantId}, sku=${product.external_code}, qty=${res.qty})`);
+      return { skipped: false };
+    }
+
+    // Caminho antigo: baixa físico local e publica Ifood
     product.on_hand = Math.max(0, (product.on_hand ?? 0) - res.qty);
     await product.save({ transaction: t });
 
     const ok = await updateIfoodStock(merchantId, ifoodProductId, nextAvailable, accessToken);
     if (!ok) throw new Error('Falha ao publicar estoque no iFood');
 
-    // 🔸 ajuste de status por disponibilidade (mantém coerência)
     try {
       await IfoodCatalogStatusService.ensureStatusByAvailability(
         merchantId,
@@ -194,7 +207,7 @@ export async function consumeReservation(params: {
 }
 
 /**
- * PDV venda → baixa físico e publica available.
+ * PDV venda/ajuste → Flag ON: ajusta no ERP; Flag OFF: ajusta em products e publica iFood.
  */
 export async function pdvAdjustOnHand(params: {
   product: Product;
@@ -206,6 +219,17 @@ export async function pdvAdjustOnHand(params: {
   const { product, delta, merchantId, accessToken, ifoodProductId } = params;
   const { onHand, activeReserved } = await getOnHandAndActiveReserved(product);
 
+  if (controlsIfoodStockInERP()) {
+    await ErpInventoryService.adjustOnHandByMapping({
+      merchantId,
+      externalCode: product.external_code,
+      delta,
+      reason: 'MANUAL_ADJUST',
+    });
+    console.log(`✅ Ajuste PDV no ERP (merchant=${merchantId}, sku=${product.external_code}, delta=${delta})`);
+    return true;
+  }
+
   const nextOnHand = Math.max(0, onHand + delta);
   const nextAvailable = computeAvailable(nextOnHand, activeReserved);
 
@@ -216,7 +240,6 @@ export async function pdvAdjustOnHand(params: {
     const ok = await updateIfoodStock(merchantId, ifoodProductId, nextAvailable, accessToken);
     if (!ok) throw new Error('Falha ao publicar estoque no iFood');
 
-    // 🔸 ajuste de status por disponibilidade
     try {
       await IfoodCatalogStatusService.ensureStatusByAvailability(
         merchantId,
