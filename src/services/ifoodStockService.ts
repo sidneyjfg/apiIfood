@@ -1,5 +1,6 @@
 // services/ifoodStockService.ts
 import axios from 'axios';
+import { controlsIfoodStockInERP } from '../utils/featureFlags';
 
 export async function updateIfoodStock(
   merchantId: string,
@@ -7,18 +8,25 @@ export async function updateIfoodStock(
   amount: number,
   accessToken: string
 ): Promise<boolean> {
+  // 🔕 Feature flag: skip publishing inventory to iFood
+  if (controlsIfoodStockInERP()) {
+    console.log(
+      `🔕 [CONTROLA_IFOOD_ESTOQUE=1] PULANDO atualização de estoque no iFood (merchantId=${merchantId}, productId=${productId}, amount=${amount}).`,
+    );
+    return true; // Considered "ok" from the caller perspective
+  }
+
   try {
     const url = `https://merchant-api.ifood.com.br/catalog/v2.0/merchants/${merchantId}/inventory`;
-    const payload = {
-      productId,
-      amount
-    };
+    const payload = { productId, amount };
     const { status } = await axios.post(url, payload, {
       headers: {
         Authorization: `Bearer ${accessToken}`,
         Accept: 'application/json',
         'Content-Type': 'application/json',
       },
+      timeout: 12000,
+      validateStatus: () => true,
     });
 
     if (status >= 200 && status < 300) {

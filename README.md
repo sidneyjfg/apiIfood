@@ -242,4 +242,41 @@ Uso:
 
 ---
 
+
+# Patch: Respect `CONTROLA_IFOOD_ESTOQUE=1` (a.k.a. `Controla_ifood_estoque=1`)
+
+This patch makes the integration **skip ANY stock publication to iFood** when the environment variable is set:
+
+```env
+# preferred (UPPERCASE)
+CONTROLA_IFOOD_ESTOQUE=1
+# accepted for backward‑compat
+Controla_ifood_estoque=1
+```
+
+## What changes
+
+- `services/ifoodStockService.ts` now short‑circuits `updateIfoodStock(...)` when the flag is enabled, logging a message and returning `true` so callers won't break.
+- Added `src/utils/featureFlags.ts` with `controlsIfoodStockInERP()` for use anywhere else if you want to guard other stock‑related writes in the future (jobs, backfills, etc.).
+
+> Status toggling (`AVAILABLE/UNAVAILABLE`) via `IfoodCatalogStatusService` stays **unchanged**. Only **inventory amounts** (`PATCH /inventory`) are blocked. If you also want to block status changes, wrap those calls with the same flag — see the snippet below.
+
+## Optional: also block product status changes
+
+If your rule should **also** prevent turning items on/off on iFood, add this guard around
+your status calls (usually in `IfoodCatalogStatusService.ensureStatusByAvailability` or where it's called):
+
+```ts
+import { controlsIfoodStockInERP } from '../utils/featureFlags';
+
+if (controlsIfoodStockInERP()) {
+  console.log('🔕 [CONTROLA_IFOOD_ESTOQUE=1] PULANDO atualização de status no iFood.');
+  return { changed: false, desired: /* whatever you computed */ };
+}
+```
+
+## Build & run
+
+No migration is needed. Just rebuild and run with the env var set.
+
 **Autor:** Sidney 🚀

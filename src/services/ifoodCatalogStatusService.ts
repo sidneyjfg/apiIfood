@@ -1,6 +1,7 @@
 // src/services/ifoodCatalogStatusService.ts
 import axios from 'axios';
 import { Product } from '../database/models/products';
+import { controlsIfoodStockInERP } from '../utils/featureFlags';
 
 const api = axios.create({
   baseURL: 'https://merchant-api.ifood.com.br/catalog/v2.0/',
@@ -60,7 +61,7 @@ export class IfoodCatalogStatusService {
     opts: { maxTries?: number; delayMs?: number } = {}
   ): Promise<BatchStatusResp> {
     const maxTries = opts.maxTries ?? 12;
-    const delayMs  = opts.delayMs  ?? 5000;
+    const delayMs = opts.delayMs ?? 5000;
 
     for (let i = 0; i < maxTries; i++) {
       const data = await this.getBatch(merchantId, batchId, accessToken);
@@ -93,11 +94,20 @@ export class IfoodCatalogStatusService {
     accessToken: string
   ) {
     const desired: StatusValue = available > 0 ? 'AVAILABLE' : 'UNAVAILABLE';
+    
+    // 🔕 Se o controle de estoque/status for apenas no ERP, não publica no iFood
+    if (controlsIfoodStockInERP()) {
+      console.log(
+        `🔕 [CONTROLA_IFOOD_ESTOQUE=1] PULANDO atualização de status no iFood (merchantId=${merchantId}, external=${product.external_code}, desired=${desired}).`
+      );
+      // não mexe no iFood nem no campo status local; só informa que não houve mudança
+      return { changed: false, desired, reason: 'flag-controls-stock-in-erp' as const };
+    }
 
     if (product.status === desired) return { changed: false, desired };
 
     const external = product.external_code;
-    if (!external) return { changed: false, desired, reason: 'no-external_code' };
+    if (!external) return { changed: false, desired, reason: 'no-external_code' as const };
 
     const batch = await this.setStatusForExternalCodes(merchantId, [external], desired, accessToken);
 
@@ -113,4 +123,5 @@ export class IfoodCatalogStatusService {
 
     return { changed: false, desired, batchStatus: batch?.batchStatus, results: batch?.results };
   }
+
 }
