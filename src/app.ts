@@ -4,6 +4,7 @@ import routes from './routes';
 import swaggerUi from 'swagger-ui-express';
 import { swaggerSpec } from './config/swagger';
 import { rawBodyMiddleware } from '@core/middlewares/rawBodyMiddleware';
+const generated = require('@config/openapi.generated.json');
 
 dotenv.config();
 
@@ -13,5 +14,6 @@ app.use(routes);
 
 // Rota Swagger
 app.use('/docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
+app.use('/docs/generated', swaggerUi.serve, swaggerUi.setup(generated));
 
 export default app;

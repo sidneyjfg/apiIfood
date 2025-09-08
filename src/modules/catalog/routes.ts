@@ -9,7 +9,6 @@ import {
 
 const router = Router();
 
-// Mantém compatibilidade com endpoints existentes
 router.get('/ifood/items/sync', syncIfoodItemsAll);
 router.get('/ifood/products/external/:externalCode', getProductByExternalCode);
 router.get('/ifood/products/:productId', getProductById);

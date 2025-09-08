@@ -1,0 +1,661 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "iFood-ERP Stock Sync API (Detailed Generated)",
+    "version": "1.0.0",
+    "description": "Gerado automaticamente a partir de controllers/services."
+  },
+  "tags": [
+    {
+      "name": "Authentication",
+      "description": "Como autenticar"
+    },
+    {
+      "name": "Merchant",
+      "description": "Detalhes e configurações das lojas"
+    },
+    {
+      "name": "Catalog",
+      "description": "Catálogo de produtos"
+    },
+    {
+      "name": "Events",
+      "description": "Eventos (webhook/polling)"
+    },
+    {
+      "name": "Order",
+      "description": "Pedidos"
+    },
+    {
+      "name": "Item",
+      "description": "Groceries - Itens"
+    },
+    {
+      "name": "Picking",
+      "description": "Groceries - Picking"
+    },
+    {
+      "name": "default",
+      "description": "Endpoints sem tag inferida"
+    }
+  ],
+  "paths": {
+    "/ifood/items/sync": {
+      "get": {
+        "tags": [
+          "Catalog"
+        ],
+        "summary": "GET /ifood/items/sync",
+        "description": "Auto-descoberto em modules/catalog/routes.ts",
+        "operationId": "get_ifood_items_sync",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/ifood/products/external/{externalCode}": {
+      "get": {
+        "tags": [
+          "Catalog"
+        ],
+        "summary": "GET /ifood/products/external/{externalCode}",
+        "description": "Auto-descoberto em modules/catalog/routes.ts",
+        "operationId": "get_ifood_products_external_externalCode",
+        "parameters": [
+          {
+            "name": "externalCode",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/ifood/products/{productId}": {
+      "get": {
+        "tags": [
+          "Catalog"
+        ],
+        "summary": "GET /ifood/products/{productId}",
+        "description": "Auto-descoberto em modules/catalog/routes.ts",
+        "operationId": "get_ifood_products_productId",
+        "parameters": [
+          {
+            "name": "productId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/poll": {
+      "get": {
+        "tags": [
+          "Events"
+        ],
+        "summary": "GET /poll",
+        "description": "Auto-descoberto em modules/events/routes.ts",
+        "operationId": "get_poll",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/": {
+      "get": {
+        "tags": [
+          "Item"
+        ],
+        "summary": "GET /",
+        "description": "Auto-descoberto em modules/groceries/item/routes.ts",
+        "operationId": "get_",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/start": {
+      "post": {
+        "tags": [
+          "Picking"
+        ],
+        "summary": "POST /start",
+        "description": "Auto-descoberto em modules/groceries/picking/routes.ts",
+        "operationId": "post_start",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/ifood": {
+      "get": {
+        "tags": [
+          "Merchant"
+        ],
+        "summary": "GET /ifood",
+        "description": "Auto-descoberto em modules/merchant/routes.ts",
+        "operationId": "get_ifood",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/erp/sync": {
+      "post": {
+        "tags": [
+          "Merchant"
+        ],
+        "summary": "POST /erp/sync",
+        "description": "Auto-descoberto em modules/merchant/routes.ts",
+        "operationId": "post_erp_sync",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/erp": {
+      "get": {
+        "tags": [
+          "Merchant"
+        ],
+        "summary": "GET /erp",
+        "description": "Auto-descoberto em modules/merchant/routes.ts",
+        "operationId": "get_erp",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/map": {
+      "post": {
+        "tags": [
+          "Merchant"
+        ],
+        "summary": "POST /map",
+        "description": "Auto-descoberto em modules/merchant/routes.ts",
+        "operationId": "post_map",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/mappings": {
+      "get": {
+        "tags": [
+          "Merchant"
+        ],
+        "summary": "GET /mappings",
+        "description": "Auto-descoberto em modules/merchant/routes.ts",
+        "operationId": "get_mappings",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/{merchantId}/status": {
+      "get": {
+        "tags": [
+          "Merchant"
+        ],
+        "summary": "GET /{merchantId}/status",
+        "description": "Auto-descoberto em modules/merchant/routes.ts",
+        "operationId": "get_merchantId_status",
+        "parameters": [
+          {
+            "name": "merchantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/{merchantId}/interruptions": {
+      "post": {
+        "tags": [
+          "Merchant"
+        ],
+        "summary": "POST /{merchantId}/interruptions",
+        "description": "Auto-descoberto em modules/merchant/routes.ts",
+        "operationId": "post_merchantId_interruptions",
+        "parameters": [
+          {
+            "name": "merchantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "Merchant"
+        ],
+        "summary": "GET /{merchantId}/interruptions",
+        "description": "Auto-descoberto em modules/merchant/routes.ts",
+        "operationId": "get_merchantId_interruptions",
+        "parameters": [
+          {
+            "name": "merchantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/{merchantId}/interruptions/{interruptionId}": {
+      "delete": {
+        "tags": [
+          "Merchant"
+        ],
+        "summary": "DELETE /{merchantId}/interruptions/{interruptionId}",
+        "description": "Auto-descoberto em modules/merchant/routes.ts",
+        "operationId": "delete_merchantId_interruptions_interruptionId",
+        "parameters": [
+          {
+            "name": "merchantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "interruptionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/{merchantId}/opening-hours": {
+      "get": {
+        "tags": [
+          "Merchant"
+        ],
+        "summary": "GET /{merchantId}/opening-hours",
+        "description": "Auto-descoberto em modules/merchant/routes.ts",
+        "operationId": "get_merchantId_opening-hours",
+        "parameters": [
+          {
+            "name": "merchantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "Merchant"
+        ],
+        "summary": "PUT /{merchantId}/opening-hours",
+        "description": "Auto-descoberto em modules/merchant/routes.ts",
+        "operationId": "put_merchantId_opening-hours",
+        "parameters": [
+          {
+            "name": "merchantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/webhook/ifood": {
+      "post": {
+        "tags": [
+          "Events"
+        ],
+        "summary": "POST /webhook/ifood",
+        "description": "Auto-descoberto em modules/orders/routes.ts",
+        "operationId": "post_webhook_ifood",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/{orderId}/retry": {
+      "post": {
+        "tags": [
+          "Order"
+        ],
+        "summary": "POST /{orderId}/retry",
+        "description": "Auto-descoberto em modules/orders/routes.ts",
+        "operationId": "post_orderId_retry",
+        "parameters": [
+          {
+            "name": "orderId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {},
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT"
+      }
+    }
+  },
+  "security": [
+    {
+      "bearerAuth": []
+    }
+  ],
+  "servers": [
+    {
+      "url": "/api",
+      "description": "API base"
+    },
+    {
+      "url": "http://localhost:3000",
+      "description": "Local Dev"
+    }
+  ]
+}
