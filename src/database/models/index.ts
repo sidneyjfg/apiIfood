@@ -9,7 +9,7 @@ import { Merchant } from './merchants';
 import { UserApiIfood } from './userApiIfood';
 import { OrderItem } from './orderItem';
 import { Order } from './order';
-
+import { ProcessedEvent } from './ProcessedEvent';
 
 export {
   Product,
@@ -22,5 +22,6 @@ export {
   InventoryReservation,
   UserApiIfood,
   OrderItem,
-  Order
+  Order,
+  ProcessedEvent
 };

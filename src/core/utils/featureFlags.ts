@@ -12,3 +12,9 @@ export function controlsIfoodStockInERP(): boolean {
   const v2 = process.env.Controla_ifood_estoque;
   return v1 === '1' || v2 === '1';
 }
+
+export const pollingEnabled = () =>
+  String(process.env.IFOOD_POLL_ENABLED ?? 'true').toLowerCase() === 'true';
+
+export const excludeHeartbeat = () =>
+  String(process.env.IFOOD_POLL_EXCLUDE_HEARTBEAT ?? 'false').toLowerCase() === 'true';

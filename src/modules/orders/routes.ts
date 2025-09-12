@@ -1,11 +1,15 @@
 import { Router } from 'express';
-import { handleIfoodWebhook } from './controllers/orderWebhookController';
+import { getCancellationReasonsController, cancelOrderController, markReadyForPickupController } from './controllers/orderActionsController';
 
 const router = Router();
 
-// Webhook de pedidos iFood
-router.post('/webhook/ifood', handleIfoodWebhook);
-// Aqui você pode adicionar reprocessos/consultas:
-// router.post('/:orderId/retry', retryOrder);
+// Listar motivos de cancelamento
+router.get('/:orderId/cancellation-reasons', getCancellationReasonsController);
+
+// Cancelar pedido
+router.post('/:orderId/cancel', cancelOrderController);
+
+// Marcar pedido como pronto (TAKEOUT)
+router.post('/:orderId/ready', markReadyForPickupController);
 
 export default router;
