@@ -1,10 +1,10 @@
 // src/controllers/merchantController.ts
 import { Request, Response } from 'express';
-import { IfoodMerchantService, InterruptionPayload, OpeningHoursPayload } from '../services/ifoodMerchantService';
+import { IfoodMerchantService, InterruptionPayload, OpeningHoursPayload } from '@modules/merchant_loja/services/ifoodMerchantService';
 import { ErpInventoryService } from '../services/erpStoreService';
 import { ErpLocation, Merchant, MerchantErpMapping } from '@db/models';
 import { sequelize } from '@config/database';
-
+import axios from 'axios';
 // GET /storeConfig/ifood?page=&size=
 // Lista (ou sincroniza e lista) merchants do iFood (igual seu buscarLojas).
 export async function listarLojasIfood(req: Request, res: Response) {
@@ -33,21 +33,41 @@ export async function syncLojasErp(req: Request, res: Response) {
 
 // GET /storeConfig/erp
 // Lista locations ERP (já sincronizadas)
-export async function listarLojasErp(req: Request, res: Response) {
-    try {
-        const rows = await ErpLocation.findAll({
-            order: [['code', 'ASC']]
-        });
-        return res.json(rows.map(r => ({
-            id: r.id,
-            code: r.code,
-            name: r.name,
-            active: r.active
-        })));
-    } catch (err: any) {
-        const msg = err?.message || 'Erro ao listar lojas ERP';
-        return res.status(500).json({ error: msg });
+export async function listarLojasNoErp(req: Request, res: Response) {
+  try {
+    const baseUrl = process.env.BASE_URL_ERP;
+    const accessToken = process.env.ACCESS_TOKEN_ERP;
+    const secretToken = process.env.SECRET_ACCESS_TOKEN_ERP;
+
+    if (!baseUrl || !accessToken || !secretToken) {
+      return res.status(500).json({ error: 'Configuração ERP ausente no .env' });
     }
+
+    const url = `${baseUrl}/lojas`;
+
+    const response = await axios.get(url, {
+      headers: {
+        'Content-Type': 'application/json',
+        'access-token': accessToken,
+        'secret-access-token': secretToken,
+      },
+      timeout: 10000,
+    });
+
+    // Normaliza o retorno (caso precise padronizar para o frontend)
+    // const lojas = Array.isArray(response.data) ? response.data.map((l: any) => ({
+    //   id: l.id ?? l.codigo ?? l.code,
+    //   code: l.code ?? l.codigo ?? String(l.id),
+    //   name: l.name ?? l.nome ?? `Loja ${l.id}`,
+    //   active: l.active ?? l.ativo ?? true,
+    // })) : [];
+
+    return res.json(response.data);
+  } catch (err: any) {
+    const status = err?.response?.status ?? 500;
+    const msg = err?.response?.data || err?.message || 'Erro ao consultar ERP';
+    return res.status(status).json({ error: msg });
+  }
 }
 
 // POST /storeConfig/map

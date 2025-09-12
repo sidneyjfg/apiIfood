@@ -10,7 +10,7 @@ import {
   putOpeningHours,
   listarLojasIfood,
   syncLojasErp,
-  listarLojasErp,
+  listarLojasNoErp,
   upsertMapping,
   listarMappings,
 } from './controllers/merchantController';
@@ -33,14 +33,14 @@ router.post('/erp/sync', syncLojasErp);
  * GET /storeConfig/erp
  * Lista erp_locations já salvas
  */
-router.get('/erp', listarLojasErp);
+router.get('/erp', listarLojasNoErp);
 
 /**
  * POST /storeConfig/map
  * Body: { merchant_id: string, erp_location_id: number }
  * Cria/atualiza o vínculo (N iFood -> 1 ERP)
  */
-router.post('/map', upsertMapping);
+router.put('/map', upsertMapping);
 
 /**
  * GET /storeConfig/mappings

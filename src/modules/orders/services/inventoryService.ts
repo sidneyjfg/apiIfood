@@ -6,7 +6,7 @@ import { InventoryReservation } from '@db/models/inventoryReservation';
 import { updateIfoodStock } from './ifoodStockService';
 import { IfoodCatalogStatusService } from '../../catalog/services/ifoodCatalogStatusService';
 import { controlsIfoodStockInERP } from '@core/utils/featureFlags';
-import { ErpInventoryService } from '../../merchant/services/erpStoreService';
+import { ErpInventoryService } from '../../merchant_loja/services/erpStoreService';
 import { ErpLocation } from '@db/models';
 
 type Channel = 'IFOOD' | 'PDV' | 'MANUAL';

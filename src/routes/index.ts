@@ -1,7 +1,7 @@
 // src/routes/index.ts
 import { Router } from 'express';
-import merchantRoutes from '../modules/merchant/routes';
-import storeConfigRoutes from '../modules/merchant/routes';
+import merchantRoutes from '../modules/merchant_loja/routes';
+import storeConfigRoutes from '../modules/merchant_loja/routes';
 import catalogRoutes from '../modules/catalog/routes';
 import orderRoutes from '../modules/orders/routes';
 import eventsRoutes from '../modules/events/routes';

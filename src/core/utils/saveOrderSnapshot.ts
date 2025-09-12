@@ -87,4 +87,5 @@ export async function saveOrderSnapshot(merchantId: string, orderPayload: any) {
       // estado do item é controlado nos handlers de transição
     });
   }
+  console.log(`[SNAPSHOT] -> Espelho do pedido ${orderId} criado  no banco`);
 }
