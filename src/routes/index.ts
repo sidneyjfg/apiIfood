@@ -14,6 +14,6 @@ router.use('/storeConfig', storeConfigRoutes);
 router.use('/', catalogRoutes);          // mantém endpoints /ifood/* existentes
 router.use('/', orderRoutes);            // mantém /webhook/ifood
 router.use('/events', eventsRoutes);
-router.use('items', itemsRoutes);
+router.use('/items', itemsRoutes);
 
 export default router;

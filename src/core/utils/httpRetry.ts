@@ -5,13 +5,25 @@ export function getRetryAfterMs(err: AxiosError): number | null {
   if (!hdr) return null;
   const n = Number(hdr);
   if (Number.isFinite(n)) return n * 1000; // segundos
-  // Retry-After pode vir como data; se vier, ignora e usa backoff
+  // se vier uma data, calcula diferença p/ agora
+  const dateMs = Date.parse(String(hdr));
+  if (!Number.isNaN(dateMs)) {
+    const diff = dateMs - Date.now();
+    return diff > 0 ? diff : null;
+  }
   return null;
 }
 
 export function shouldRetry(err: AxiosError): boolean {
   const status = err.response?.status ?? 0;
-  return status === 429 || (status >= 500 && status < 600);
+  // HTTP retry
+  if (status === 429 || (status >= 500 && status < 600)) return true;
+  // Network/timeout sem status
+  const code = (err as any)?.code as string | undefined;
+  if (!status && code) {
+    return ['ECONNRESET', 'ETIMEDOUT', 'ENOTFOUND', 'ECONNABORTED'].includes(code);
+  }
+  return false;
 }
 
 export function backoffDelay(attempt: number, baseMs = 300, maxMs = 8000) {
